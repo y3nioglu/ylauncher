@@ -114,6 +114,11 @@ export default function App() {
             ? await apiLogin(nickname.trim(), password)
             : await apiRegister(nickname.trim(), password)
       storeAuth(result)
+      // KRITIK: token'i main surecine de gecir — duyuru, mod/plugin yayini ve
+      // katilma akisi main'de saklanan token ile calisir. (Sadece acilistaki
+      // oturum geri yukleme bu cagriyi yapiyordu; taze giris sonrasi main
+      // token'siz kaliyordu -> "yayinlamadi: token yok" + duyuru yok.)
+      await bridge.setApiToken(result.token).catch(() => {})
       resetLiveEvents() // yeni token ile canli baglanti tazelensin
       setUser(result.user)
       } catch (err) {
@@ -122,7 +127,7 @@ export default function App() {
         setBusy(false)
       }
     },
-    [mode, nickname, password, password2]
+    [mode, nickname, password, password2, bridge]
   )
 
   const logout = useCallback(() => {
