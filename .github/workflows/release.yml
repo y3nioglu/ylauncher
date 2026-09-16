@@ -50,11 +50,32 @@ jobs:
       - name: Build app bundle (electron-vite)
         run: npm run build
 
-      - name: Package and publish release
+      # electron-builder'in kendi GitHub publish'i ayni tag icin TWO ayri
+      # release nesnesi olusturabiliyor (blockmap biri, exe+yml digerinde) —
+      # updater 'latest' release'e dusup latest.yml'i bulamayip 404 veriyor
+      # (sahada 0.1.6-0.1.8'de yasandi). Bu yuzden paketleme publish'siz
+      # yapilir; yuklemeyi asagidaki action TEK release'e yapar.
+      - name: Package (no publish)
+        run: npx electron-builder --win --publish never
+
+      - name: Read version
+        id: ver
+        shell: bash
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release (single, all assets)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: MC Friends Launcher ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            release/${{ steps.ver.outputs.version }}/*.exe
+            release/${{ steps.ver.outputs.version }}/latest.yml
+            release/${{ steps.ver.outputs.version }}/*.blockmap
         env:
-          # electron-builder GITHUB_TOKEN ile release olusturur (tag'ten surum okur)
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --win --publish always
 
       - name: Upload build log on failure
         if: failure()
