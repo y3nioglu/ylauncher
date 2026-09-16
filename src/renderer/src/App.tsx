@@ -38,9 +38,8 @@ export default function App() {
   const [notice, setNotice] = useState<string | null>(null)
   // Faz 8: tema
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
-  // Faz 12.5: giris ekranindan API adresi yonlendirme (paket kurulumlari)
-  const [apiAddr, setApiAddr] = useState('')
-  const [apiAddrApplied, setApiAddrApplied] = useState<string | null>(null)
+  // Faz 12.5: API adresi pakete gömülü (DEFAULT_API_BASE). Giriş ekranında
+  // alan YOK — acil durum değişikliği Ayarlar > Sunucu adresi'nden yapılır.
 
   // Acilista main surecin canli API adresini renderer istemcisine besle
   // (settings.json override'i main baslangicta uygulanir; preload anlik
@@ -50,8 +49,6 @@ export default function App() {
       .getInfo()
       .then((info) => {
         setApiBaseUrl(info.apiBase)
-        setApiAddrApplied(info.apiBase)
-        setApiAddr(info.apiBase)
       })
       .catch(() => {})
   }, [bridge])
@@ -81,16 +78,6 @@ export default function App() {
     },
     [bridge]
   )
-
-  const applyApiAddr = useCallback(() => {
-    void bridge
-      .setApiBase(apiAddr.trim() || null)
-      .then((applied) => {
-        setApiBaseUrl(applied)
-        setApiAddrApplied(applied)
-      })
-      .catch(() => {})
-  }, [bridge, apiAddr])
 
   // Acilista kayitli oturumu dogrula
   useEffect(() => {
@@ -225,30 +212,7 @@ export default function App() {
               {busy ? 'Bekle...' : mode === 'login' ? 'Giris Yap' : 'Hesap Olustur'}
             </button>
           </form>
-
-          <p className="hint">
-            Offline hesap sistemi — bu launcher yalnizca arkadas grubu icindir.
-          </p>
-
-          {/* Faz 12.5: paket kurulumlarini VPS'e yonlendirme */}
-          <label className="hint api-addr-field">
-            Sunucu adresi (bos = varsayilan)
-            <input
-              value={apiAddr}
-              onChange={(e) => setApiAddr(e.target.value)}
-              onBlur={applyApiAddr}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  applyApiAddr()
-                }
-              }}
-              placeholder="Orn: http://1.2.3.4:8787"
-            />
-            {apiAddrApplied && (
-              <span className="hint">Aktif: {apiAddrApplied} — giris istegi bu adrese gider</span>
-            )}
-          </label>
+          <p className="hint">Offline hesap sistemi — bu launcher yalnizca arkadas grubu icindir.</p>
         </div>
       </div>
     )
