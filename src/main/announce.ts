@@ -52,7 +52,9 @@ export async function announceServer(opts: AnnounceOpts): Promise<void> {
       clientMods: opts.clientMods ?? 0,
       plugins: opts.plugins ?? 0
     })
-    console.log(`[announce] sunucu duyuruldu: ${opts.address}:${opts.port} (${opts.mcVersion})`)
+    console.log(
+      `[announce] sunucu duyuruldu: ${opts.address}:${opts.port} (${opts.mcVersion}) mod:${opts.clientMods ?? 0} plugin:${opts.plugins ?? 0}`
+    )
   } catch (err) {
     console.log(
       `[announce] duyuru basarisiz (sunucu etkilenmedi): ${err instanceof Error ? err.message : String(err)}`

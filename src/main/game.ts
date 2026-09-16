@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { spawn, ChildProcess } from 'node:child_process'
 import path from 'node:path'
-import { mkdirSync, existsSync } from 'node:fs'
+import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { Client, Authenticator } from 'minecraft-launcher-core'
 import {
   fetchVersionManifest,
@@ -24,6 +24,8 @@ export interface LaunchOptions {
    * verildiginde manifest'te ARANMAZ, dogrudan versions/<id>/ profilinden
    * baslatilir (Fabric kutuphanelerini launcher-core indirir). */
   localVersionId?: string
+  /** Faz 15: ek JVM argumanlari (performans on ayarlari GC bayraklari). */
+  customArgs?: string[]
 }
 
 export type GameEvent =
@@ -37,6 +39,8 @@ export type GameEvent =
 export class GameLauncher extends EventEmitter {
   private child: ChildProcess | null = null
   private busy = false
+  /** Faz 15: acik oyun oturumunun baslangic ts'i (playtime takibi). */
+  private playStartTs = 0
 
   constructor(private root: string) {
     super()
@@ -166,16 +170,19 @@ export class GameLauncher extends EventEmitter {
         javaPath,
         authorization,
         customLaunchArgs: quickPlay,
+        ...(opts.customArgs?.length ? { customArgs: opts.customArgs } : {}),
         ...(overrides ? { overrides } : {})
       })
 
       if (!child) throw new Error('Oyun sureci baslatilamadi.')
       this.child = child
+      this.playStartTs = Date.now()
       this.emitEvent({ type: 'started' })
 
       child.on('close', (code) => {
         this.child = null
         this.busy = false
+        this.recordPlaySessionEnd()
         this.emitEvent({ type: 'close', code })
       })
       child.on('error', (err) => {
@@ -191,10 +198,37 @@ export class GameLauncher extends EventEmitter {
 
   stop(): void {
     if (!this.child) return
+    this.recordPlaySessionEnd()
     if (process.platform === 'win32') {
       spawn('taskkill', ['/pid', String(this.child.pid), '/T', '/F'])
     } else {
       this.child.kill('SIGTERM')
+    }
+  }
+
+  /**
+   * Faz 15: oturum sonunda playtime.json'a sure yazar (profil karti verisi).
+   * Hata sessizce yutulur — istatistik kaybi oyunu etkilemez.
+   */
+  private recordPlaySessionEnd(): void {
+    if (!this.playStartTs) return
+    const durationMs = Math.max(0, Date.now() - this.playStartTs)
+    this.playStartTs = 0
+    try {
+      const file = path.join(this.root, 'playtime.json')
+      let data: { totalMs?: number; sessions?: Array<{ start: string; end: string }> } = {}
+      if (existsSync(file)) {
+        try {
+          data = JSON.parse(readFileSync(file, 'utf8'))
+        } catch {
+          /* bozuk dosya: sifirla */
+        }
+      }
+      data.totalMs = (data.totalMs ?? 0) + durationMs
+      data.sessions = [...(data.sessions ?? []), { start: new Date().toISOString(), end: new Date().toISOString() }].slice(-500)
+      writeFileSync(file, JSON.stringify(data, null, 2), 'utf8')
+    } catch {
+      /* disk hatasi: yut */
     }
   }
 

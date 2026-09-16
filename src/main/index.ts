@@ -8,6 +8,19 @@ import { suppressGamingOverlayPopup } from './gamingOverlay'
 import { initUpdater, getInfo, downloadAppUpdate, installAppUpdate } from './updater'
 import { listFabricLoaders } from './fabric'
 import { getApiBase, setApiBaseOverride } from '../shared/apiBase'
+import { getPreset, type PerfPresetId } from '../shared/perfPresets'
+import { probeServer } from './probe'
+import { analyzeCrashLog, type CrashDiagnosis } from './crashAnalyzer'
+import { buildProfileCard } from './profile'
+import {
+  searchModpacks,
+  searchResourcePacks,
+  latestCompatibleFile,
+  parseMrpack,
+  downloadModpack,
+  downloadResourcePack
+} from './modrinth'
+import { listScreenshots, deleteScreenshot } from './gallery'
 
 interface GameSettings {
   minRamMB: number
@@ -16,6 +29,8 @@ interface GameSettings {
   wizardDone?: boolean
   theme?: 'dark' | 'light'
   apiBaseOverride?: string
+  /** Faz 15: performans on ayari (JVM GC bayraklari secimi) */
+  perfPreset?: PerfPresetId
 }
 
 // Canli API adresi: varsayilan paylasilan modulden gelir; asagida Ayarlar'dan
@@ -118,7 +133,8 @@ ipcMain.handle('game:launch', async (_e, opts: Parameters<GameLauncher['launch']
     ...opts,
     minRamMB: opts.minRamMB ?? settings.minRamMB,
     maxRamMB: opts.maxRamMB ?? settings.maxRamMB,
-    javaPathOverride: opts.javaPathOverride ?? settings.javaPathOverride
+    javaPathOverride: opts.javaPathOverride ?? settings.javaPathOverride,
+    customArgs: getPreset(settings.perfPreset).args
   })
 })
 
@@ -141,7 +157,8 @@ ipcMain.handle('game:save-settings', (_e, s: GameSettings) => {
     javaPathOverride: s.javaPathOverride?.trim() || undefined,
     wizardDone: true,
     theme: s.theme === 'light' ? 'light' : 'dark',
-    apiBaseOverride: nextOverride
+    apiBaseOverride: nextOverride,
+    perfPreset: s.perfPreset
   })
 })
 
@@ -379,6 +396,43 @@ initUpdater()
 ipcMain.handle('app:update-info', () => getInfo())
 ipcMain.handle('app:update-download', () => downloadAppUpdate())
 ipcMain.handle('app:update-install', () => installAppUpdate())
+
+// ---- Faz 15: sunucu tarayicisi (SLP sorgusu) ----
+ipcMain.handle('probe:server', (_e, p: { host: string; port: number }) => {
+  return probeServer(String(p?.host ?? ''), Number(p?.port ?? 25565))
+})
+
+// ---- Faz 15: crash log analizi ----
+ipcMain.handle('crash:analyze', (_e, log: string): CrashDiagnosis | null => {
+  return analyzeCrashLog(String(log ?? ''))
+})
+
+// ---- Faz 15: profil karti ----
+ipcMain.handle('profile:card', (_e, nickname: string) => {
+  return buildProfileCard(GAME_ROOT, String(nickname ?? ''))
+})
+
+// ---- Faz 17: Modrinth (modpack + resource pack arama) ----
+ipcMain.handle('modrinth:search-modpacks', (_e, q: string) => searchModpacks(String(q ?? '')))
+ipcMain.handle('modrinth:search-resourcepacks', (_e, q: string) => searchResourcePacks(String(q ?? '')))
+ipcMain.handle('modrinth:latest-file', (_e, p: { projectId: string; mcVersion: string; loader?: 'fabric' | 'vanilla' }) =>
+  latestCompatibleFile(String(p?.projectId ?? ''), String(p?.mcVersion ?? ''), p?.loader ?? 'fabric')
+)
+ipcMain.handle('modrinth:parse-mrpack', (_e, filePath: string) => parseMrpack(String(filePath ?? '')))
+ipcMain.handle(
+  'modrinth:download-modpack',
+  (_e, p: { projectId: string; mcVersion: string; gameRoot: string }) =>
+    downloadModpack(String(p?.projectId ?? ''), String(p?.mcVersion ?? '1.21.11'), String(p?.gameRoot ?? GAME_ROOT))
+)
+ipcMain.handle(
+  'modrinth:download-resourcepack',
+  (_e, p: { projectId: string; mcVersion: string; gameRoot: string }) =>
+    downloadResourcePack(String(p?.projectId ?? ''), String(p?.mcVersion ?? '1.21.11'), String(p?.gameRoot ?? GAME_ROOT))
+)
+
+// ---- Faz 18: ekran goruntusu galerisi ----
+ipcMain.handle('gallery:list', () => listScreenshots(GAME_ROOT))
+ipcMain.handle('gallery:delete', (_e, file: string) => deleteScreenshot(GAME_ROOT, String(file ?? '')))
 
 console.log(`[app] MC Friends Launcher v${__APP_VERSION__} (build: ${__APP_BUILD__})`)
 

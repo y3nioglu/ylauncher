@@ -12,6 +12,7 @@ import {
   type ActiveServer,
   type OutgoingWhitelistState
 } from '../lib/friends'
+import type { ProbeStatus } from '../lib/game'
 import { processJoinLine, PHASE_LABEL, type JoinState } from '../../../shared/joinStatus'
 
 interface Props {
@@ -28,6 +29,8 @@ export default function ServerListScreen({ user, servers, onRefresh }: Props) {
   const knownVersionsRef = useRef<Set<string>>(new Set())
   const [probing, setProbing] = useState<string | null>(null)
   const [probeResult, setProbeResult] = useState<Record<string, boolean>>({})
+  // Faz 15: canli sunucu durumu (SLP) — liste her yenilendiginde sorgulanir
+  const [liveStatus, setLiveStatus] = useState<Record<string, ProbeStatus>>({})
   // ---- Katilma durumu izleyici (Faz 5b) ----
   const [joinState, setJoinState] = useState<JoinState>({ phase: 'idle', kick: null })
   const [joinLabel, setJoinLabel] = useState<string | null>(null)
@@ -60,6 +63,24 @@ export default function ServerListScreen({ user, servers, onRefresh }: Props) {
       alive = false
     }
   }, [bridge])
+
+  // Faz 15: listedeki her sunucuya SLP sorgusu (ping/oyuncu/MOTD/ikon).
+  // servers degisince tetiklenir; paralel sorgu, hizli zaman asimi.
+  useEffect(() => {
+    let alive = true
+    for (const srv of servers) {
+      const key = String(srv.hostId)
+      bridge
+        .probeServerStatus(srv.address, srv.port)
+        .then((st) => {
+          if (alive) setLiveStatus((prev) => ({ ...prev, [key]: st }))
+        })
+        .catch(() => {})
+    }
+    return () => {
+      alive = false
+    }
+  }, [bridge, servers])
 
   // Gonderdigim whitelist isteklerinin durumu: canli olay ile aninda tazelenir
   // (host onayladiginda "✅ eklendin" ~1 sn'de gorunur) + 60 sn yedek polling
@@ -374,15 +395,35 @@ export default function ServerListScreen({ user, servers, onRefresh }: Props) {
         ) : (
           servers.map((srv) => {
             const reachable = probeResult[String(srv.hostId)]
+            const live = liveStatus[String(srv.hostId)]
             return (
               <div key={srv.hostId} className="active-server-row">
-                <span
-                  className={`status-dot ${reachable === false ? 'offline' : ''}`}
-                  title={reachable === false ? 'Son kontrolde ulasilamadi' : 'Aktif'}
-                />
+                {/* Faz 15: sunucu ikonu (SLP favicon) */}
+                {live?.favicon ? (
+                  <img className="srv-icon" src={live.favicon} alt="" width={32} height={32} />
+                ) : (
+                  <span
+                    className={`status-dot ${reachable === false ? 'offline' : ''}`}
+                    title={reachable === false ? 'Son kontrolde ulasilamadi' : 'Aktif'}
+                  />
+                )}
                 <div className="active-server-info">
                   <b>{srv.host}</b> sunucusu açık — <code>{srv.address}:{srv.port}</code>
                   <span className="active-server-ver"> (Paper {srv.mcVersion})</span>
+                  {/* Faz 15: canli durum — ping, oyuncu, MOTD */}
+                  {live && live.online && (
+                    <span className="srv-live">
+                      <span className="srv-ping" title="Ping">
+                        {live.latencyMs != null ? `${live.latencyMs} ms` : '...'}
+                      </span>
+                      {live.players && (
+                        <span className="srv-players" title="Oyuncular">
+                          👥 {live.players.online}/{live.players.max}
+                        </span>
+                      )}
+                      {live.motd && <span className="srv-motd" title={live.motd}>{live.motd.slice(0, 60)}</span>}
+                    </span>
+                  )}
                   {/* Faz 14: icerik rozetleri — sunucudaki mod/plugin sayilari */}
                   {(srv.clientMods ?? 0) > 0 && (
                     <span

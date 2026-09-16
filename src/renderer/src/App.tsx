@@ -10,6 +10,9 @@ import {
   type AuthUser
 } from './lib/api'
 import { gameBridge, type GameSettings, type ApiHealth, type AppUpdateInfo } from './lib/game'
+import { PERF_PRESETS, getPreset } from '../../shared/perfPresets'
+import ModrinthBrowser from './components/ModrinthBrowser'
+import ScreenshotGallery from './components/ScreenshotGallery'
 import PlayScreen from './components/PlayScreen'
 import ServerListScreen from './components/ServerListScreen'
 import FriendsScreen from './components/FriendsScreen'
@@ -18,7 +21,7 @@ import { fetchFriends, fetchActiveServers, type ActiveServer } from './lib/frien
 import { subscribeLiveEvents, resetLiveEvents } from './lib/poller'
 
 type Mode = 'login' | 'register'
-type Tab = 'play' | 'servers' | 'server' | 'friends' | 'settings'
+type Tab = 'play' | 'servers' | 'server' | 'content' | 'friends' | 'settings'
 
 interface RequestToast {
   id: number
@@ -243,6 +246,8 @@ function HomeView({
 }) {
   const [tab, setTab] = useState<Tab>('play')
   const [health, setHealth] = useState<ApiHealth | null>(null)
+  // Faz 17: gameRoot (icerik tarayicisi indirme hedefi icin)
+  const [appInfo, setAppInfo] = useState<{ gameRoot: string } | null>(null)
   const [incomingCount, setIncomingCount] = useState(0)
   const [toasts, setToasts] = useState<RequestToast[]>([])
   const seenRequests = useRef<Set<number> | null>(null)
@@ -252,6 +257,8 @@ function HomeView({
   const [activeServers, setActiveServers] = useState<ActiveServer[]>([])
   // Faz 11: otomatik guncelleme durumu (Ayarlar panelinde gosterilir)
   const [updateInfo, setUpdateInfo] = useState<AppUpdateInfo | null>(null)
+  // Faz 15: profil karti acik mi
+  const [profileOpen, setProfileOpen] = useState(false)
 
   // Aktif sunuculari tazele
   const refreshServers = useCallback(() => {
@@ -291,6 +298,12 @@ function HomeView({
     check()
     const t = setInterval(check, 15_000)
     return () => clearInterval(t)
+  }, [])
+
+  // Faz 17: gameRoot'u bir kez al
+  useEffect(() => {
+    const bridge = gameBridge()
+    bridge.getInfo().then((i) => setAppInfo({ gameRoot: i.gameRoot })).catch(() => {})
   }, [])
 
   const pushToasts = useCallback((items: { requestId: number; nickname: string }[]) => {
@@ -354,6 +367,12 @@ function HomeView({
 
   return (
     <div className="home-wrap">
+      {/* Faz 15: animasyonlu arka plan (saf CSS, GPU dostu) */}
+      <div className="bg-scene" aria-hidden="true">
+        <div className="bg-stars" />
+        <div className="bg-clouds" />
+        <div className="bg-hills" />
+      </div>
       <header className="topbar">
         <div className="brand small">
           MC <span>Friends</span>
@@ -387,6 +406,13 @@ function HomeView({
           </button>
           <button
             type="button"
+            className={tab === 'content' ? 'tab active' : 'tab'}
+            onClick={() => setTab('content')}
+          >
+            İçerik
+          </button>
+          <button
+            type="button"
             className={tab === 'friends' ? 'tab active' : 'tab'}
             onClick={() => setTab('friends')}
           >
@@ -403,7 +429,14 @@ function HomeView({
         </nav>
         <div className="userbox">
           <span className="dot online" title="Cevrimici" />
-          <b>{user.nickname}</b>
+          <b
+            className="profile-card-trigger"
+            title="Profil kartini goster"
+            style={{ cursor: 'pointer' }}
+            onClick={() => setProfileOpen(true)}
+          >
+            {user.nickname}
+          </b>
           <button type="button" className="btn ghost" onClick={onLogout}>
             Cikis
           </button>
@@ -416,11 +449,14 @@ function HomeView({
           <ServerListScreen user={user} servers={activeServers} onRefresh={refreshServers} />
         )}
         {tab === 'server' && <ServerScreen user={user} />}
+        {tab === 'content' && <ContentScreen gameRoot={appInfo?.gameRoot ?? ''} />}
         {tab === 'friends' && <FriendsScreen onDataChange={checkRequests} />}
         {tab === 'settings' && (
           <SettingsPanel theme={theme} onTheme={onTheme} updateInfo={updateInfo} />
         )}
       </main>
+
+      {profileOpen && <ProfileCardModal nickname={user.nickname} onClose={() => setProfileOpen(false)} />}
 
       <div className="toast-stack">
         {toasts.map((t) => (
@@ -447,6 +483,112 @@ function HomeView({
             </button>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+// Faz 17: icerik tarayicisi — modpack + resource pack (Modrinth)
+function ContentScreen({ gameRoot }: { gameRoot: string }) {
+  const bridge = gameBridge()
+  const [mcVersion, setMcVersion] = useState('')
+  const [sub, setSub] = useState<'modpack' | 'resourcepack'>('modpack')
+
+  useEffect(() => {
+    // Hedef MC surumu: kullanıcının en son oynadığı surum (yoksa en yeni release)
+    bridge
+      .profileLastVersion()
+      .catch(() => null)
+      .then((v) => v || bridge.listVersions().then((r) => r.latestRelease))
+      .then((v) => setMcVersion(v || '1.21.11'))
+      .catch(() => setMcVersion('1.21.11'))
+  }, [bridge])
+
+  if (!gameRoot) return <div className="boot">Yukleniyor...</div>
+
+  return (
+    <div className="play-screen">
+      <div className="panel">
+        <h2>İçerik Tarayıcısı</h2>
+        <p className="setting-note">
+          Modrinth'ten arama ve indirme — hedef sürüm: <b>{mcVersion || '...'}</b>
+        </p>
+        <div className="tabs" style={{ marginBottom: 12 }}>
+          <button
+            type="button"
+            className={sub === 'modpack' ? 'tab active' : 'tab'}
+            onClick={() => setSub('modpack')}
+          >
+            Modpack'ler
+          </button>
+          <button
+            type="button"
+            className={sub === 'resourcepack' ? 'tab active' : 'tab'}
+            onClick={() => setSub('resourcepack')}
+          >
+            Resource Pack'ler
+          </button>
+        </div>
+        <ModrinthBrowser kind={sub} gameRoot={gameRoot} mcVersion={mcVersion} />
+      </div>
+
+      <div className="panel" style={{ marginTop: 16 }}>
+        <h3>📸 Ekran Görüntüleri</h3>
+        <ScreenshotGallery />
+      </div>
+    </div>
+  )
+}
+
+// Faz 15: profil karti — oyunculuk istatistikleri (kullanici adina tiklayinca)
+function ProfileCardModal({ nickname, onClose }: { nickname: string; onClose: () => void }) {
+  const bridge = gameBridge()
+  const [card, setCard] = useState<import('./lib/game').ProfileCard | null>(null)
+
+  useEffect(() => {
+    bridge.profileCard(nickname).then(setCard).catch(() => {})
+  }, [bridge, nickname])
+
+  const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }) : '—')
+
+  return (
+    <div className="modal-backdrop" onClick={onClose} role="presentation">
+      <div className="panel profile-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Profil karti">
+        <h3>🎮 {nickname}</h3>
+        {!card ? (
+          <p className="setting-note">Yukleniyor...</p>
+        ) : (
+          <>
+            <div className="profile-grid">
+              <div className="profile-stat">
+                <span className="profile-num">{card.totalHours}</span>
+                <span className="profile-lbl">saat oynandi</span>
+              </div>
+              <div className="profile-stat">
+                <span className="profile-num">{card.sessions}</span>
+                <span className="profile-lbl">oturum</span>
+              </div>
+              <div className="profile-stat">
+                <span className="profile-num">{card.multiplayerMinutes}</span>
+                <span className="profile-lbl">dk arkadaslarla</span>
+              </div>
+              <div className="profile-stat">
+                <span className="profile-num">{card.peakPlayers}</span>
+                <span className="profile-lbl">en kalabalik</span>
+              </div>
+            </div>
+            <p className="setting-note">
+              İlk giriş: {fmtDate(card.firstPlayed)}
+              <br />
+              Son giriş: {fmtDate(card.lastPlayed)}
+            </p>
+          </>
+        )}
+        <div className="setting-actions">
+          <button type="button" className="btn ghost" onClick={onClose}>
+            Kapat
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -542,6 +684,24 @@ function SettingsPanel({
           </select>
         </label>
       </div>
+
+      {/* Faz 15: performans on ayarlari */}
+      <label className="setting-wide">
+        Performans ön ayarı (JVM)
+        <select
+          value={settings.perfPreset ?? 'balanced'}
+          onChange={(e) => update({ perfPreset: e.target.value as GameSettings['perfPreset'] })}
+        >
+          {PERF_PRESETS.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="setting-note">
+        {getPreset(settings.perfPreset).description} Bir sonraki oyun açılışında geçerli olur.
+      </p>
 
       <div className="setting-actions">
         <button type="button" className="btn primary" onClick={save}>

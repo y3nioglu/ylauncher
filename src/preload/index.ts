@@ -40,6 +40,30 @@ contextBridge.exposeInMainWorld('launcher', {
   appUpdateDownload: () => ipcRenderer.invoke('app:update-download') as Promise<boolean>,
   appUpdateInstall: () => ipcRenderer.invoke('app:update-install') as Promise<void>,
 
+  // Faz 15: sunucu tarayicisi + crash analizi + profil karti
+  probeServerStatus: (host: string, port: number) =>
+    ipcRenderer.invoke('probe:server', { host, port }) as Promise<unknown>,
+  analyzeCrash: (log: string) =>
+    ipcRenderer.invoke('crash:analyze', log) as Promise<unknown>,
+  profileCard: (nickname: string) =>
+    ipcRenderer.invoke('profile:card', nickname) as Promise<unknown>,
+
+  // Faz 17: Modrinth
+  searchModpacks: (q: string) => ipcRenderer.invoke('modrinth:search-modpacks', q) as Promise<unknown>,
+  searchResourcePacks: (q: string) =>
+    ipcRenderer.invoke('modrinth:search-resourcepacks', q) as Promise<unknown>,
+  modrinthLatestFile: (p: { projectId: string; mcVersion: string; loader?: 'fabric' | 'vanilla' }) =>
+    ipcRenderer.invoke('modrinth:latest-file', p) as Promise<unknown>,
+  parseMrpack: (filePath: string) => ipcRenderer.invoke('modrinth:parse-mrpack', filePath) as Promise<unknown>,
+  modrinthDownloadModpack: (p: { projectId: string; mcVersion: string; gameRoot: string }) =>
+    ipcRenderer.invoke('modrinth:download-modpack', p) as Promise<{ ok: boolean; file?: string; error?: string }>,
+  modrinthDownloadResourcepack: (p: { projectId: string; mcVersion: string; gameRoot: string }) =>
+    ipcRenderer.invoke('modrinth:download-resourcepack', p) as Promise<{ ok: boolean; file?: string; error?: string }>,
+
+  // Faz 18: ekran goruntusu galerisi
+  galleryList: () => ipcRenderer.invoke('gallery:list') as Promise<unknown>,
+  galleryDelete: (file: string) => ipcRenderer.invoke('gallery:delete', file) as Promise<boolean>,
+
   // Sunucu yonetimi (Faz 4) + bore tunnel
   listPaperVersions: () => ipcRenderer.invoke('server:list-paper-versions'),
   restartTunnel: () => ipcRenderer.invoke('server:tunnel-restart'),

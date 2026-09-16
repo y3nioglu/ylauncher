@@ -181,8 +181,41 @@ serversRouter.get(
          )
       order by s.announced_at desc
     `
+    // Rozet sayilari: duyurudaki deger 0 ise yayimlanmis manifest sayisini kullan.
+    // Eski host paketleri sayi gondermiyor; manifest her zaman dogru kaynaktir.
+    const hostsNeedingFallback = new Set(
+      rows.filter((r) => isActive(r) && (r.client_mods === 0 || r.plugins === 0)).map((r) => r.host_id)
+    )
+    const manifestCounts = new Map<number, { clientMods: number; plugins: number }>()
+    if (hostsNeedingFallback.size > 0) {
+      const hostIds = [...hostsNeedingFallback]
+      const cmRows = await sql<{ host_id: number; n: number }[]>`
+        select host_id, count(*)::int as n from public.ylauncher_host_clientmods
+        where host_id = any(${hostIds}) group by host_id`
+      const plRows = await sql<{ host_id: number; n: number }[]>`
+        select host_id, count(*)::int as n from public.ylauncher_host_plugins
+        where host_id = any(${hostIds}) group by host_id`
+      for (const r of cmRows) {
+        const cur = manifestCounts.get(r.host_id) ?? { clientMods: 0, plugins: 0 }
+        cur.clientMods = r.n
+        manifestCounts.set(r.host_id, cur)
+      }
+      for (const r of plRows) {
+        const cur = manifestCounts.get(r.host_id) ?? { clientMods: 0, plugins: 0 }
+        cur.plugins = r.n
+        manifestCounts.set(r.host_id, cur)
+      }
+    }
     res.json({
-      servers: rows.filter(isActive).map(toDto)
+      servers: rows.filter(isActive).map((row) => {
+        const dto = toDto(row)
+        const fb = manifestCounts.get(row.host_id)
+        if (fb) {
+          if (!dto.clientMods && fb.clientMods) dto.clientMods = fb.clientMods
+          if (!dto.plugins && fb.plugins) dto.plugins = fb.plugins
+        }
+        return dto
+      })
     })
   })
 )

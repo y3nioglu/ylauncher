@@ -2,7 +2,7 @@
 // listesi ve tek tikla katilma akisi ayri Sunucu Listesi ekranina tasindi
 // (kullanici istegi: acik sunucular Oyna sayfasinda gosterilmesin).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { gameBridge, type VersionEntry } from '../lib/game'
+import { gameBridge, type VersionEntry, type CrashDiagnosis } from '../lib/game'
 import type { AuthUser } from '../lib/api'
 
 interface Props {
@@ -24,6 +24,8 @@ export default function PlayScreen({ user }: Props) {
   const [progress, setProgress] = useState<{ percent: number; label: string } | null>(null)
   const [logLines, setLogLines] = useState<string[]>([])
   const logEndRef = useRef<HTMLDivElement | null>(null)
+  // Faz 15: crash analizi — oyun kapandiginda log taranir, tani panelde gosterilir
+  const [crash, setCrash] = useState<CrashDiagnosis | null>(null)
 
   // Surum listesini ve indirilmis surumleri getir
   useEffect(() => {
@@ -66,6 +68,14 @@ export default function PlayScreen({ user }: Props) {
         setPlaying(false)
         setStatusText(`Oyun kapatildi (kod: ${ev.code ?? 0}).`)
         setProgress(null)
+        // Faz 15: log'u tara, crash tanisi varsa goster
+        setLogLines((current) => {
+          const buf = current.join('\n')
+          if (buf.trim()) {
+            bridge.analyzeCrash(buf).then(setCrash).catch(() => {})
+          }
+          return current
+        })
         // Oyun kapaninca indirilen yeni surumleri yakalamak icin listeyi tazele
         bridge
           .listInstalledVersions()
@@ -119,6 +129,7 @@ export default function PlayScreen({ user }: Props) {
     if (!selected) return
     setPlaying(true)
     setLogLines([])
+    setCrash(null)
     setStatusText('Hazirlaniyor...')
     bridge
       .launch({ versionId: selected, nickname: user.nickname })
@@ -203,6 +214,13 @@ export default function PlayScreen({ user }: Props) {
           </div>
         )}
         {statusText && <div className="play-status">{statusText}</div>}
+
+        {crash && (
+          <div className={`crash-box ${crash.severity === 'warning' ? 'warn' : 'error'}`}>
+            <b>{crash.severity === 'warning' ? '⚠ ' : '✖ '}{crash.title}</b>
+            <p>{crash.fix}</p>
+          </div>
+        )}
       </div>
 
       {logLines.length > 0 && (

@@ -24,6 +24,8 @@ export interface GameSettings {
   theme?: 'dark' | 'light'
   /** Faz 12.5: VPS'e yonlendirme — bos/undefined = varsayilan adres */
   apiBaseOverride?: string
+  /** Faz 15: performans on ayari (JVM GC bayraklari) */
+  perfPreset?: 'low' | 'balanced' | 'high'
 }
 
 export type GameEvent = {
@@ -127,6 +129,56 @@ export interface ServerStatsInfo2 {
 // ---- Faz 11: otomatik guncelleme tipleri shared/appUpdate.ts'te yasar ----
 import type { AppUpdateInfo, AppUpdateEvent } from '../../../shared/appUpdate'
 export type { AppUpdateStatus, AppUpdateInfo, AppUpdateEvent } from '../../../shared/appUpdate'
+
+// ---- Faz 15/17: tarayici, crash analizi, profil karti, Modrinth tipleri ----
+export interface ProbeStatus {
+  online: boolean
+  latencyMs: number | null
+  players: { online: number; max: number } | null
+  motd: string | null
+  version: string | null
+  favicon: string | null
+}
+
+export interface CrashDiagnosis {
+  title: string
+  fix: string
+  severity: 'error' | 'warning'
+}
+
+export interface ProfileCard {
+  nickname: string
+  totalHours: number
+  sessions: number
+  firstPlayed: string | null
+  lastPlayed: string | null
+  multiplayerMinutes: number
+  peakPlayers: number
+}
+
+export interface ModrinthResult {
+  projectId: string
+  slug: string
+  title: string
+  description: string
+  downloads: number
+  iconUrl: string | null
+  pageUrl: string
+}
+
+export interface ModrinthFile {
+  url: string
+  filename: string
+  sha1: string
+  sizeBytes: number
+}
+
+export interface ScreenshotInfo {
+  file: string
+  takenAt: string
+  sizeKB: number
+  dataUri: string
+}
 
 export interface GameBridge {
   listVersions: () => Promise<{ latestRelease: string; versions: VersionEntry[] }>
@@ -244,6 +296,26 @@ export interface GameBridge {
   getWhitelist: () => Promise<string[]>
   whitelistAdd: (nick: string) => Promise<string[]>
   whitelistRemove: (nick: string) => Promise<string[]>
+
+  // ---- Faz 15: sunucu tarayicisi + crash analizi + profil karti ----
+  /** SLP sorgusu: ping, oyuncu sayisi, MOTD, favicon (kisitli sure). */
+  probeServerStatus: (host: string, port: number) => Promise<ProbeStatus>
+  /** Oyun ciktisindan crash tanisi uretir (eslesme yoksa null). */
+  analyzeCrash: (log: string) => Promise<CrashDiagnosis | null>
+  /** Profil karti verisi (oynama suresi, oturum sayisi...). */
+  profileCard: (nickname: string) => Promise<ProfileCard>
+
+  // ---- Faz 17: Modrinth (modpack + resource pack arama) ----
+  searchModpacks: (q: string) => Promise<ModrinthResult[]>
+  searchResourcePacks: (q: string) => Promise<ModrinthResult[]>
+  modrinthLatestFile: (p: { projectId: string; mcVersion: string; loader?: 'fabric' | 'vanilla' }) => Promise<ModrinthFile | null>
+  parseMrpack: (filePath: string) => Promise<{ files: ModrinthFile[]; mcVersion: string | null; loaderVersion: string | null }>
+  modrinthDownloadModpack: (p: { projectId: string; mcVersion: string; gameRoot: string }) => Promise<{ ok: boolean; file?: string; error?: string }>
+  modrinthDownloadResourcepack: (p: { projectId: string; mcVersion: string; gameRoot: string }) => Promise<{ ok: boolean; file?: string; error?: string }>
+
+  // ---- Faz 18: ekran goruntusu galerisi ----
+  galleryList: () => Promise<ScreenshotInfo[]>
+  galleryDelete: (file: string) => Promise<boolean>
   /** Faz 5c: onaylanan istekte whitelist'e ekle (zaten varsa dokunmaz). */
   whitelistEnsure: (nick: string) => Promise<string[]>
 
