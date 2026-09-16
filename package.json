@@ -92,7 +92,8 @@
       {
         "provider": "github",
         "owner": "y3nioglu",
-        "repo": "ylauncher"
+        "repo": "ylauncher",
+        "releaseType": "release"
       }
     ]
   }
