@@ -8,4 +8,4 @@ server/data/
 .DS_Store
 release/
 downloads/
-storage/
+storage/jobs_debug.json
