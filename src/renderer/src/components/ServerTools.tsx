@@ -57,6 +57,10 @@ export default function ServerTools({ bridge, running, onNotify }: Props) {
   // ---- plugins ----
   const [plugins, setPlugins] = useState<PluginInfo[]>([])
 
+  // ---- Faz 14: offline skin destegi (SkinsRestorer) ----
+  const [skinInstalled, setSkinInstalled] = useState<string | null>(null)
+  const [skinBusy, setSkinBusy] = useState(false)
+
   // ---- Faz 12: modlar (clientMods/ + Fabric loader) ----
   const [fabricLoaders, setFabricLoaders] = useState<string[]>([])
   const [fabricStatus, setFabricStatus] = useState<{ loaderVersion: string | null; paperVersion: string | null } | null>(null)
@@ -116,10 +120,13 @@ export default function ServerTools({ bridge, running, onNotify }: Props) {
   useEffect(() => {
     if (tab === 'props') loadProps()
     else if (tab === 'backup') loadBackups()
-    else if (tab === 'plugins') loadPlugins()
+    else if (tab === 'plugins') {
+      loadPlugins()
+      bridge.skinStatus().then((s) => setSkinInstalled(s.installed)).catch(() => {})
+    }
     else if (tab === 'world') loadWorlds()
     else if (tab === 'admin') loadBans()
-  }, [tab, loadProps, loadBackups, loadPlugins, loadWorlds, loadBans])
+  }, [tab, loadProps, loadBackups, loadPlugins, loadWorlds, loadBans, bridge])
 
   // Sunucu durumu degisince (baslat/durdur) listeler bayatlamasin
   const prevRunning = useRef(running)
@@ -438,6 +445,41 @@ export default function ServerTools({ bridge, running, onNotify }: Props) {
 
       {tab === 'plugins' && (
         <div className="backup-box">
+          {/* Faz 14: offline skin destegi (SkinsRestorer) — tek tikla kurulum */}
+          <div className="version-box">
+            <div className="version-line">
+              <b>Skin desteği (offline sunucularda skinner görünmez):</b>{' '}
+              {skinInstalled ? (
+                <span className="msg ok inline">Kurulu — {skinInstalled}</span>
+              ) : (
+                <span className="muted">Kurulu değil</span>
+              )}
+            </div>
+            <p className="setting-note">
+              SkinsRestorer kurar: oyuncular oyunda <code>/skin url &lt;link&gt;</code> ile skin set eder.
+              Sunucu offline modda çalıştığı için Mojang skinleri görünmez — bu plugin onu çözer.
+            </p>
+            <div className="setting-actions">
+              <button
+                type="button"
+                className="btn small primary"
+                disabled={skinBusy}
+                onClick={() => {
+                  setSkinBusy(true)
+                  void bridge
+                    .skinInstall()
+                    .then((r) => {
+                      onNotify(r.ok ? (r.installed ? `Kuruldu: ${r.installed} — yeniden başlatmada yüklenir.` : r.skipped ?? 'Zaten kurulu.') : `Kurulamadı: ${r.skipped}`)
+                      return bridge.skinStatus().then((s) => setSkinInstalled(s.installed))
+                    })
+                    .catch((e) => onNotify(`Hata: ${errText(e)}`))
+                    .finally(() => setSkinBusy(false))
+                }}
+              >
+                {skinBusy ? 'İndiriliyor...' : skinInstalled ? 'En yeni sürüme güncelle' : 'SkinsRestorer Kur'}
+              </button>
+            </div>
+          </div>
           <p className="setting-note">
             plugins/ klasöründeki .jar'lar. "Kapat" dosyayı silmez — .disabled.jar yapar. Değişiklikler
             yeniden başlatmada geçerli olur.

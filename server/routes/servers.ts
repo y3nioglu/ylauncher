@@ -32,7 +32,10 @@ const announceSchema = z.object({
     ),
   port: z.number().int().min(1).max(65535).default(25565),
   mcVersion: z.string().regex(/^[0-9a-zA-Z.\-]+$/, 'Gecersiz surum'),
-  online: z.boolean().default(true)
+  online: z.boolean().default(true),
+  // Faz 14: icerik meta verisi (rozetler) — negatif/absurd degerler kabul edilmez
+  clientMods: z.number().int().min(0).max(100).default(0),
+  plugins: z.number().int().min(0).max(100).default(0)
 })
 
 interface ActiveServerRow {
@@ -43,6 +46,8 @@ interface ActiveServerRow {
   port: number
   mc_version: string
   announced_at: Date
+  client_mods?: number
+  plugins?: number
   kick_reason?: string | null
   kick_raw?: string | null
   kick_at?: Date | null
@@ -64,6 +69,8 @@ function toDto(row: ActiveServerRow) {
     port: row.port,
     mcVersion: row.mc_version,
     announcedAt: new Date(row.announced_at).toISOString(),
+    clientMods: row.client_mods ?? 0,
+    plugins: row.plugins ?? 0,
     lastKick:
       row.kick_reason && row.kick_at
         ? { reason: row.kick_reason, rawLine: row.kick_raw ?? '', at: new Date(row.kick_at).toISOString() }
@@ -83,7 +90,7 @@ serversRouter.post(
       res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Gecersiz veri' })
       return
     }
-    const { address, port, mcVersion, online } = parsed.data
+    const { address, port, mcVersion, online, clientMods, plugins } = parsed.data
     const uid = req.auth!.uid
 
     if (!online) {
@@ -93,13 +100,15 @@ serversRouter.post(
     }
 
     await sql`
-      insert into public.ylauncher_servers (host_id, address, port, mc_version, announced_at)
-      values (${uid}, ${address}, ${port}, ${mcVersion}, now())
+      insert into public.ylauncher_servers (host_id, address, port, mc_version, announced_at, client_mods, plugins)
+      values (${uid}, ${address}, ${port}, ${mcVersion}, now(), ${clientMods}, ${plugins})
       on conflict (host_id) do update
       set address = excluded.address,
           port = excluded.port,
           mc_version = excluded.mc_version,
-          announced_at = now()
+          announced_at = now(),
+          client_mods = excluded.client_mods,
+          plugins = excluded.plugins
     `
     res.status(201).json({ announced: true })
   })
@@ -156,6 +165,7 @@ serversRouter.get(
     const uid = req.auth!.uid
     const rows = await sql<ActiveServerRow[]>`
       select s.host_id, s.address, s.port, s.mc_version, s.announced_at,
+             s.client_mods, s.plugins,
              u.nickname, u.last_seen_at,
              k.reason as kick_reason, k.raw_line as kick_raw, k.created_at as kick_at
       from public.ylauncher_servers s

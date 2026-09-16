@@ -564,7 +564,9 @@ export class ServerManager extends EventEmitter {
         address: host,
         port: Number(portStr ?? this.directPort),
         mcVersion: this.paperVersion ?? 'unknown',
-        online: true
+        online: true,
+        clientMods: this.countClientMods(),
+        plugins: this.countPlugins()
       })
     }, 5 * 60_000)
     this.announceTimer.unref?.()
@@ -664,7 +666,10 @@ export class ServerManager extends EventEmitter {
             address: host,
             port: Number(portStr ?? this.directPort),
             mcVersion: this.paperVersion ?? 'unknown',
-            online: true
+            online: true,
+            // Faz 14: rozet meta verisi — sunucu icerigi arkadas listesinde gosterilir
+            clientMods: this.countClientMods(),
+            plugins: this.countPlugins()
           })
         }
       }
@@ -1301,6 +1306,33 @@ export class ServerManager extends EventEmitter {
       loaderVersion: this.hostLoaderVersion ?? this.loadConfig().fabricLoader ?? null,
       paperVersion: this.paperVersion ?? this.loadConfig().paper?.version ?? null
   }
+  }
+
+  /** Faz 14: skin kurulumunun hedef dizini (aktif profilin plugins/ klasoru). */
+  getServerPluginsDir(): string {
+    return path.join(this.serverDir, 'plugins')
+  }
+
+  /** Faz 14: duyuru rozetleri icin clientMods jar sayisi (hata -> 0). */
+  private countClientMods(): number {
+    try {
+      const dir = path.join(this.root, 'clientMods')
+      if (!existsSync(dir)) return 0
+      return readdirSync(dir).filter((f) => f.toLowerCase().endsWith('.jar')).length
+    } catch {
+      return 0
+    }
+  }
+
+  /** Faz 14: duyuru rozetleri icin aktif profilin plugin sayisi (hata -> 0). */
+  private countPlugins(): number {
+    try {
+      const dir = path.join(this.serverDir, 'plugins')
+      if (!existsSync(dir)) return 0
+      return readdirSync(dir).filter((f) => f.toLowerCase().endsWith('.jar')).length
+    } catch {
+      return 0
+    }
   }
 
   /** ready aninda beklemeden publish tetikleme (Yenile butonu). */

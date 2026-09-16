@@ -93,6 +93,9 @@ export interface ActiveServer {
   port: number
   mcVersion: string
   announcedAt: string
+  /** Faz 14: duyuruyla gelen icerik meta verisi (rozetler). */
+  clientMods?: number
+  plugins?: number
   /** Faz 5b: host'un Paper log'undan yakaladigi son kick (2 dk omurlu). */
   lastKick?: ActiveServerKick | null
 }

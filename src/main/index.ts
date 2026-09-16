@@ -211,6 +211,25 @@ ipcMain.handle('server:profiles-switch', (_e, name: string) => serverManager.swi
 ipcMain.handle('server:profiles-create', (_e, name: string) => serverManager.addProfile(String(name)))
 ipcMain.handle('server:profiles-delete', (_e, name: string) => serverManager.removeProfile(String(name)))
 ipcMain.handle('server:stats', () => serverManager.getStats())
+// Faz 14: offline skin destegi (SkinsRestorer) — tek tikla kurulum/yenileme
+ipcMain.handle('server:skin-install', async () => {
+  const { ensureSkinsRestorer, findSkinsRestorer } = await import('./skins')
+  const pluginsDir = serverManager.getServerPluginsDir()
+  const existing = findSkinsRestorer(pluginsDir)
+  const res = await ensureSkinsRestorer({
+    pluginsDir,
+    onStatus: (m) => {
+      for (const w of BrowserWindow.getAllWindows()) {
+        w.webContents.send('server-event', { type: 'status', message: m })
+      }
+    }
+  })
+  return { ...res, previous: existing }
+})
+ipcMain.handle('server:skin-status', () => {
+  const { findSkinsRestorer } = require('./skins') as typeof import('./skins')
+  return { installed: findSkinsRestorer(serverManager.getServerPluginsDir()) }
+})
 ipcMain.handle('server:backup-create', (_e, label?: string) => serverManager.backupNow(label))
 ipcMain.handle('server:backup-list', () => serverManager.listBackups())
 ipcMain.handle('server:backup-delete', (_e, file: string) => serverManager.deleteBackup(String(file)))

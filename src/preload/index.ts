@@ -95,6 +95,10 @@ contextBridge.exposeInMainWorld('launcher', {
     ipcRenderer.invoke('server:clientmods-add') as Promise<{ added: string | null; dir: string }>,
   clientModsList: () =>
     ipcRenderer.invoke('server:clientmods-list') as Promise<{ file: string; sizeMB: number; warning?: string }[]>,
+  // Faz 14: offline skin destegi (SkinsRestorer)
+  skinStatus: () => ipcRenderer.invoke('server:skin-status') as Promise<{ installed: string | null }>,
+  skinInstall: () =>
+    ipcRenderer.invoke('server:skin-install') as Promise<{ ok: boolean; installed?: string; skipped?: string }>,
   clientModsDelete: (file: string) =>
     ipcRenderer.invoke('server:clientmods-delete', file) as Promise<void>,
   pluginsAdd: () => ipcRenderer.invoke('server:plugins-add') as Promise<{ added: string | null; dir: string }>,

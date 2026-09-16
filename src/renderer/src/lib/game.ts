@@ -191,8 +191,11 @@ export interface GameBridge {
   clientModsDir: () => Promise<string>
   /** Dosya diyaloğu ile mod jar ekle (multi-select). */
   clientModsAdd: () => Promise<{ added: string | null; dir: string }>
-  clientModsList: () => Promise<{ file: string; sizeMB: number }[]>
+  clientModsList: () => Promise<{ file: string; sizeMB: number; warning?: string }[]>
   clientModsDelete: (file: string) => Promise<void>
+  /** Faz 14: offline skin destegi (SkinsRestorer) — tek tikla kurulum */
+  skinStatus: () => Promise<{ installed: string | null }>
+  skinInstall: () => Promise<{ ok: boolean; installed?: string; skipped?: string }>
   /** Dosya diyaloğu ile plugin jar ekle (multi-select). */
   pluginsAdd: () => Promise<{ added: string | null; dir: string }>
   /** MC surumu icin kurulu yerel Fabric profil id (vanilla'da null). */

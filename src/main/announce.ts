@@ -11,6 +11,9 @@ interface AnnounceOpts {
   port: number
   mcVersion: string
   online: boolean
+  /** Faz 14: rozet meta verisi (arkadas listesinde gosterilir). */
+  clientMods?: number
+  plugins?: number
 }
 
 async function post(path: string, token: string | null, body: unknown): Promise<void> {
@@ -45,7 +48,9 @@ export async function announceServer(opts: AnnounceOpts): Promise<void> {
       address: opts.address,
       port: opts.port,
       mcVersion: opts.mcVersion,
-      online: opts.online
+      online: opts.online,
+      clientMods: opts.clientMods ?? 0,
+      plugins: opts.plugins ?? 0
     })
     console.log(`[announce] sunucu duyuruldu: ${opts.address}:${opts.port} (${opts.mcVersion})`)
   } catch (err) {
