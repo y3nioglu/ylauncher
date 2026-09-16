@@ -62,7 +62,7 @@ export default function ServerTools({ bridge, running, onNotify }: Props) {
   const [fabricStatus, setFabricStatus] = useState<{ loaderVersion: string | null; paperVersion: string | null } | null>(null)
   const [modsNote, setModsNote] = useState<string | null>(null)
   const [modsBusy, setModsBusy] = useState(false)
-  const [clientMods, setClientMods] = useState<{ file: string; sizeMB: number }[]>([])
+  const [clientMods, setClientMods] = useState<{ file: string; sizeMB: number; warning?: string }[]>([])
   const [modsDir, setModsDir] = useState<string | null>(null)
 
   const loadMods = useCallback(() => {
@@ -652,8 +652,27 @@ export default function ServerTools({ bridge, running, onNotify }: Props) {
             <p className="setting-note">Henüz mod yok — "+ Mod Ekle" ile jar seç veya klasöre elle kopyala.</p>
           ) : (
             clientMods.map((m) => (
-              <div key={m.file} className="plugin-row">
-                <span className="plugin-name">{m.file}</span>
+              <div key={m.file} className="plugin-row" style={m.warning ? { borderLeft: '3px solid var(--danger, #e5484d)', paddingLeft: 8 } : undefined}>
+                <span className="plugin-name" title={m.warning}>{m.file}</span>
+                {m.warning && (
+                  <span
+                    className="badge warn"
+                    title={m.warning}
+                    style={{
+                      color: '#fff',
+                      background: '#e5484d',
+                      borderRadius: 10,
+                      fontSize: 11,
+                      padding: '1px 8px',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      maxWidth: 260
+                    }}
+                  >
+                    ⚠ {m.warning}
+                  </span>
+                )}
                 <span className="muted">{m.sizeMB} MB</span>
                 <button
                   type="button"

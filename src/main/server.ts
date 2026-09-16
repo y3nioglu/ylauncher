@@ -1351,15 +1351,25 @@ export class ServerManager extends EventEmitter {
     return { added: res.filePaths.map((p) => path.basename(p)).join(', '), dir }
   }
 
-  /** clientMods/ icindeki jar'lari listeler (UI tablosu icin). */
-  listClientMods(): { file: string; sizeMB: number }[] {
+  /** clientMods/ icindeki jar'lari listeler (UI tablosu icin) + uyumluluk uyarilari. */
+  listClientMods(): { file: string; sizeMB: number; warning?: string }[] {
     const dir = path.join(this.root, 'clientMods')
     if (!existsSync(dir)) return []
+    // Uyumluluk taramasi bir kez yapilip dosya adina indekslenir (tarama hatasi listeyi bozmaz)
+    let warnMap = new Map<string, string>()
+    try {
+      // Dinamik import ile dongsu bagimlilik onlenir; tarama hizlidir (manifesto okuma)
+      const { scanModCompatibility } = require('./fabric') as typeof import('./fabric')
+      warnMap = new Map(scanModCompatibility(dir, this.paperVersion ?? 'unknown').map((w) => [w.jar, w.problem]))
+    } catch {
+      /* tarama yok -> rozetsiz liste */
+    }
     return readdirSync(dir)
       .filter((f) => f.toLowerCase().endsWith('.jar'))
       .map((f) => ({
         file: f,
-        sizeMB: Math.round((statSync(path.join(dir, f)).size / (1024 * 1024)) * 10) / 10
+        sizeMB: Math.round((statSync(path.join(dir, f)).size / (1024 * 1024)) * 10) / 10,
+        warning: warnMap.get(f)
       }))
       .sort((a, b) => a.file.localeCompare(b.file))
   }

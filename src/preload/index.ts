@@ -94,7 +94,7 @@ contextBridge.exposeInMainWorld('launcher', {
   clientModsAdd: () =>
     ipcRenderer.invoke('server:clientmods-add') as Promise<{ added: string | null; dir: string }>,
   clientModsList: () =>
-    ipcRenderer.invoke('server:clientmods-list') as Promise<{ file: string; sizeMB: number }[]>,
+    ipcRenderer.invoke('server:clientmods-list') as Promise<{ file: string; sizeMB: number; warning?: string }[]>,
   clientModsDelete: (file: string) =>
     ipcRenderer.invoke('server:clientmods-delete', file) as Promise<void>,
   pluginsAdd: () => ipcRenderer.invoke('server:plugins-add') as Promise<{ added: string | null; dir: string }>,
