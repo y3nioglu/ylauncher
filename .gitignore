@@ -1,0 +1,11 @@
+node_modules/
+out/
+dist/
+dist-test/
+server/data/
+*.log
+.env
+.DS_Store
+release/
+downloads/
+storage/

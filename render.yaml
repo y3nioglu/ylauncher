@@ -1,0 +1,49 @@
+# Render Blueprint — mc-friends-launcher API (ucretsiz plan)
+#
+# Kullanim (2 yol):
+#
+# 1) Blueprints (en kolay): Bu dosyayi GitHub reposuna ittikten sonra
+#    https://dashboard.render.com/select-repo/new -> "New" -> "Blueprint" ->
+#    repoyu sec -> Render bu dosyadaki servisi otomatik kurar.
+#
+# 2) Elle kurulum: Render Dashboard -> New -> Web Service -> repoyu bagla ->
+#    Asagidaki degerleri gir:
+#      Runtime:            Node
+#      Build Command:      npm ci && npm run migrate
+#      Start Command:      npm run start:server
+#      Health Check Path:  /api/health
+#    Environment tablosunda DATABASE_URL (Neon baglanti dizesi) ve JWT_SECRET
+#    (asagidaki generateNewKey: true ile Render otomatik uretir) tanimli olmali.
+#
+# Neon Postgres'i render.com panelinden degil https://neon.tech uzerinden
+# ayri olusturup Connection String'i Render Environment'ina yapistiriyorsun.
+# (Render'in kendi ucretsiz Postgres'i 30 gun sonra silinir — Neon kalici.)
+
+services:
+  - type: web
+    name: ylauncher-api
+    runtime: node
+    plan: free
+    region: frankfurt        # Turkiye'ye en yakin bolge (gecikme icin onemli)
+    buildCommand: npm ci && npm run migrate
+    startCommand: npm run start:server
+    healthCheckPath: /api/health
+    # Kalici disk: guncelleme dosyalari + yayimlanan jar'lar yeniden deploy'da
+    # silinmesin. Ucretsiz planda 1 GB'e kadar disk ucretsizdir.
+    disk:
+      name: ylauncher-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        sync: false          # Degeri panelde Neon baglanti dizesiyle dolduracaksin
+      - key: JWT_SECRET
+        generateValue: true  # Render rastgele gizli anahtar uretir
+      - key: DOWNLOADS_DIR
+        value: /var/data/downloads
+      - key: PLUGIN_STORAGE
+        value: /var/data/storage/plugins
+      - key: CLIENTMOD_STORAGE
+        value: /var/data/storage/clientmods
+    # Ucretsiz planda 15 dk trafik yoksa uyur; ilk istek ~30-60 sn gecikmeli
+    # uyanir (launcher'in ilk saglik kontrolu bunu tolere eder).
