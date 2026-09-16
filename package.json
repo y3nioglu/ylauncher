@@ -63,6 +63,7 @@
   "build": {
     "appId": "com.mcfriends.launcher",
     "productName": "MC Friends Launcher",
+    "artifactName": "MC-Friends-Launcher-Setup-${version}.${ext}",
     "directories": {
       "output": "release/${version}"
     },
