@@ -28,22 +28,15 @@ services:
     buildCommand: npm ci && npm run migrate
     startCommand: npm run start:server
     healthCheckPath: /api/health
-    # Kalici disk: guncelleme dosyalari + yayimlanan jar'lar yeniden deploy'da
-    # silinmesin. Ucretsiz planda 1 GB'e kadar disk ucretsizdir.
-    disk:
-      name: ylauncher-data
-      mountPath: /var/data
-      sizeGB: 1
+    # NOT: Render'in disk ozelligi ucretli plana tasindi; ucretsiz planda
+    # dosya depolama gecicidir (deploy'da sifirlanir). Yayimlanan plugin/
+    # client mod jar'lari bunun etkilenir — host'un yeniden "Modlari Yayimla"
+    # demesi yeterli (manifest DB'de kalici). Guncelleme dosyalari ise
+    # GitHub Releases'te tutulur (package.json > build.publish: github).
     envVars:
       - key: DATABASE_URL
         sync: false          # Degeri panelde Neon baglanti dizesiyle dolduracaksin
       - key: JWT_SECRET
         generateValue: true  # Render rastgele gizli anahtar uretir
-      - key: DOWNLOADS_DIR
-        value: /var/data/downloads
-      - key: PLUGIN_STORAGE
-        value: /var/data/storage/plugins
-      - key: CLIENTMOD_STORAGE
-        value: /var/data/storage/clientmods
     # Ucretsiz planda 15 dk trafik yoksa uyur; ilk istek ~30-60 sn gecikmeli
     # uyanir (launcher'in ilk saglik kontrolu bunu tolere eder).

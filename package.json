@@ -14,6 +14,9 @@
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "dist": "electron-vite build && electron-builder --win --publish never",
+    "release": "node scripts/release.mjs",
+    "release:minor": "node scripts/release.mjs minor",
+    "release:major": "node scripts/release.mjs major",
     "testpack": "node scripts/testpack.mjs",
     "testpack:push": "node scripts/testpack.mjs --push"
   },
@@ -83,8 +86,9 @@
     },
     "publish": [
       {
-        "provider": "generic",
-        "url": "http://localhost:8787/downloads"
+        "provider": "github",
+        "owner": "y3nioglu",
+        "repo": "ylauncher"
       }
     ]
   }

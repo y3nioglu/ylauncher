@@ -79,23 +79,35 @@ npm run dist
 `release/0.1.3/` altındaki **Setup .exe**'yi arkadaşlarına ver (veya
 Adım 6'daki güncelleme kanalıyla). Kimse adres/kurulum bilgisi girmeyecek.
 
-## Adım 6 — Otomatik güncelleme kanalı (isteğe bağlı ama önerilir)
+## Adım 6 — Otomatik güncelleme kanalı: GitHub Releases (ücretsiz)
 
-Güncellemeleri de Render üzerinden dağıtabilirsin:
+Render'ın disk özelliği ücretli plana geçtiği için güncelleme dosyaları
+Render'da değil **GitHub Releases**'te tutulur — tamamen ücretsiz, boyut
+derdi yok. Ayarlar zaten yapıldı (`package.json > build.publish: github`,
+owner: `y3nioglu`, repo: `ylauncher`). Gereksinimler:
 
-1. Render panelinde servisine **Disks** ekle: Mount path `/var/data`, 1 GB
-   (`render.yaml` blueprint'i bunu otomatik ekler; elle kurulumda panelden ekle)
-2. Environment'a ekle (blueprint kullanıyorsan otomatik):
-   - `DOWNLOADS_DIR=/var/data/downloads`
-   - `PLUGIN_STORAGE=/var/data/storage/plugins`
-   - `CLIENTMOD_STORAGE=/var/data/storage/clientmods`
-3. Yeni sürüm çıkarırken: `package.json` version artır → `npm run dist` →
-   `release/<surum>/` içindeki **.exe + latest.yml + .blockmap** dosyalarını
-   diskteki `downloads/` klasörüne kopyala
-4. Eski launcher'lar açılışta yeni sürümü kendileri fark eder
+- Repo **public** olmalı (private repoda updater indirme için token ister;
+  arkadaşların makinesine token koyamayız)
+- Yayınlamak için tek yapman gereken:
 
-(Kısa yolu devam ettirmek istersen: dosyaları OneDrive/Drive linkinden
-elle paylaş, updater olmadan da olur.)
+```bash
+npm run release            # (veya: npm run release:minor / release:major)
+```
+
+Komut sürümü artırır, commit'ler, `v<sürüm>` tag'iyle push'lar. Bundan
+sonrasını **GitHub Actions** yapar: Windows paketini bulutta derler ve
+GitHub Releases'i otomatik oluşturur (exe + latest.yml + blockmap). 3-6 dk
+sürer; ilerlemeyi https://github.com/y3nioglu/ylauncher/actions
+sayfasından izle. Kişisel access token (GH_TOKEN) gerekmez — GitHub'ın
+kendi `GITHUB_TOKEN`'ı kullanılır (workflow `contents: write` izniyle).
+
+Eski launcher'lar açılışta GitHub'dan latest.yml okur, yeni sürümü fark eder
+ve Ayarlar > Guncellemeler kutusunda "Yeni sürüm var" gösterir.
+
+Not: Render tarafında `DOWNLOADS_DIR`/disk env'leri gerekmiyor; sunucudaki
+`/downloads` rotası boş kalabilir (zarar vermez). Yayımlanan plugin/client
+mod jar'ları hâlâ Render'ın **geçici** diskinde — yeniden deploy'da silinir,
+host'un yeniden "Modları Yayımla" demesi yeterli (manifest DB'de kalıcı).
 
 ---
 

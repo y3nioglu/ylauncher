@@ -1,0 +1,65 @@
+# Otomatik surum yayini: v* tag'i itildiginde Windows paketi derler ve
+# GitHub Releases'e yukler (draft DEGIL — direkt yayinda).
+#
+# Kullanim akisi:
+#   npm run release:prep     -> surum artirir + commit + tag (v0.1.4) + push
+#   GitHub Actions calisir   -> 3-6 dk icinde release yayinda
+#
+# Notlar:
+# - GITHUB_TOKEN yetkileri workflow icinde verilir; personal access token gerekmez.
+# - electron-builder --publish always: exe + latest.yml + blockmap'i release
+#   asset'leri olarak yukler; kurulu launcher'lar bir sonraki acilista bulur.
+# - electron'un postinstall script'i izin gerektirdiginden npm ci yerine
+#   npm install --ignore-scripts kullanilir; electron-builder indirme isi
+#   Electron Builder binaries action cache'i ile hizlanir.
+
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # release olusturma + asset yukleme icin sart
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Electron Builder cache
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\electron-builder\Cache
+          key: ${{ runner.os }}-electron-builder-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-builder-
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+
+      - name: Build and publish release
+        env:
+          # electron-builder GITHUB_TOKEN ile release olusturur (tag'ten surum okur)
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EP_GITHUB_COMMIT: true
+        run: npx electron-builder --win --publish always
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-context
+          path: |
+            package.json
+            electron.vite.config.ts
+          retention-days: 7

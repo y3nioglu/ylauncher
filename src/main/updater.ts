@@ -1,13 +1,14 @@
 // Faz 11: otomatik guncelleme (electron-updater).
 //
-// Kurulum: electron-builder, yayin paketini (NSIS installer + latest.yml)
-// sunucunun /downloads dizinine kopyalar; electron-updater baslangicta
-// <API_BASE>/downloads/latest.yml dosyasini okuyup yeni surum varsa indirir.
+// Kurulum: electron-builder publish: github ile release olusturur (GH_TOKEN
+// gerekli); electron-updater ayni kaynaktan latest.yml okuyup yeni surumu
+// bulur. Render'in disk ozelligi ucretli plana tasindigi icin guncelleme
+// kanali GitHub Releases'e tasindi — tamamen ucretsiz, boyut siniri yok.
+// Repo public olmali (private ise indirme token ister).
 // Kod imzalama olmadigi (arkadas grubu icin sertifika maliyeti gereksiz)
 // icin Windows'ta SmartScreen uyarisi normaldir.
 import { app, BrowserWindow } from 'electron'
 import electronUpdater from 'electron-updater'
-import { getApiBase } from '../shared/apiBase'
 import type { AppUpdateInfo, AppUpdateStatus } from '../shared/appUpdate'
 
 const { autoUpdater } = electronUpdater
@@ -45,10 +46,11 @@ export function initUpdater(): void {
   }
   // Sunucunun /downloads dizinini guncelleme kaynagi olarak kullan:
   // <API_BASE>/downloads/latest.yml
-  autoUpdater.setFeedURL({
-    provider: 'generic',
-    url: `${getApiBase()}/downloads` // canli okur: Ayarlar'dan API degisirse sonraki kontrol oraya bakar
-  })
+  // Feed: GitHub Releases (package.json > build.publish ile ayni kaynak).
+  // electron-updater sahibi repoyu build.publish'ten otomatik okur; token
+  // gerekmez (public repo), latest.yml + .exe + .blockmap release asset'lerinden
+  // indirilir.
+  autoUpdater.autoDownload = false // indirme kararini UI'ya birak
   autoUpdater.autoDownload = false // indirme kararini UI'ya birak
   autoUpdater.autoInstallOnAppQuit = true // indiyse cikista da kurulur
 
