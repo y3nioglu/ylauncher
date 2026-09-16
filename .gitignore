@@ -9,3 +9,4 @@ server/data/
 release/
 downloads/
 storage/jobs_debug.json
+storage/
