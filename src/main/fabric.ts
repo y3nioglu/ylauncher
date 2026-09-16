@@ -11,6 +11,7 @@ import { pipeline } from 'node:stream/promises'
 import { Readable } from 'node:stream'
 import { createWriteStream } from 'node:fs'
 import { createHash } from 'node:crypto'
+import { inflateRawSync } from 'node:zlib'
 
 const FABRIC_META = 'https://meta.fabricmc.net/v2'
 const FABRIC_MAVEN = 'https://maven.fabricmc.net'
@@ -152,6 +153,71 @@ export interface FabricApiResult {
   skipped?: string
 }
 
+// ---- Faz 12.6: genel Fabric modu bağımlılık çözücüsü --------------------
+//
+// Problem: fabric-api'yi otomatik kurduk ama bağımlılık zinciri bitmedi —
+// sahada VeinMiner gibi modlar `fabric-language-kotlin` gibi İKİNCİL
+// bağımlılıklar isteyebiliyor; eksikken oyun `Incompatible mods found!`
+// ile açılışta crash ediyor.
+//
+// Çözüm: oyun başlatılmadan önce `mods/` içindeki TÜM jar'ların
+// `fabric.mod.json` manifestosu okunur, `depends` girdilerinde eksik olan
+// bağımlılıklar Modrinth'ten indirilir. Zincirleme: indirilen jar'ın kendisi
+// de kuyruğa eklenir. Döngü emniyeti: en fazla 12 tur.
+
+interface FabricModJson {
+  id?: string
+  provides?: string[]
+  depends?: Record<string, string>
+}
+
+/**
+ * Zip central directory'den `fabric.mod.json` girdisini bulup içeriğini
+ * döndürür. (Local header'daki compSize veri-descriptor'lu jar'larda 0
+ * olabildiği için central directory kullanılır — her jar'da kesindir.)
+ */
+function readFabricModJson(jarPath: string): FabricModJson | null {
+  try {
+    const buf = readFileSync(jarPath)
+    // EOCD imzasını dosya sonundan tara (max yorum uzunluğu 65_535)
+    const eocdSig = 0x06054b50
+    let eocd = -1
+    for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 65_535); i--) {
+      if (buf.readUInt32LE(i) === eocdSig) {
+        eocd = i
+        break
+      }
+    }
+    if (eocd === -1) return null
+    const entryCount = buf.readUInt16LE(eocd + 10)
+    let ptr = buf.readUInt32LE(eocd + 16) // ilk central directory girdisi
+    for (let n = 0; n < entryCount; n++) {
+      if (ptr + 46 > buf.length || buf.readUInt32LE(ptr) !== 0x02014b50) break
+      const method = buf.readUInt16LE(ptr + 10)
+      const compSize = buf.readUInt32LE(ptr + 20)
+      const fnLen = buf.readUInt16LE(ptr + 28)
+      const exLen = buf.readUInt16LE(ptr + 30)
+      const cmLen = buf.readUInt16LE(ptr + 32)
+      const localOff = buf.readUInt32LE(ptr + 42)
+      const name = buf.toString('utf8', ptr + 46, ptr + 46 + fnLen)
+      if (name === 'fabric.mod.json') {
+        // local header: imza(4) + ... + fnLen(+26) + exLen(+28) -> veri +30
+        const lfn = buf.readUInt16LE(localOff + 26)
+        const lex = buf.readUInt16LE(localOff + 28)
+        const dataStart = localOff + 30 + lfn + lex
+        const data = buf.subarray(dataStart, dataStart + compSize)
+        const raw = method === 8 ? inflateRawSync(data) : data
+        const json = JSON.parse(raw.toString('utf8')) as FabricModJson
+        return json
+      }
+      ptr += 46 + fnLen + exLen + cmLen
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
 export async function ensureFabricApi(opts: {
   gameRoot: string
   mcVersion: string
@@ -197,4 +263,131 @@ export async function ensureFabricApi(opts: {
     if (tmp) rmSync(tmp, { force: true })
     return { ok: false, skipped: `fabric-api indirilemedi: ${err instanceof Error ? err.message : String(err)}` }
   }
+}
+
+export interface DepsResult {
+  ok: boolean
+  installed: string[]
+  failures: string[]
+  skipped?: string
+}
+
+/**
+ * Faz 12.6: `mods/` klasöründeki Fabric modlarının `depends` bildirimlerini
+ * tarayıp eksik bağımlılıkları Modrinth'ten indirir (zincirleme, en fazla
+ * 12 tur). Başarısızlık katılmayı engellemez — dönen `failures` UI'da
+ * gösterilir.
+ */
+export async function resolveModDependencies(opts: {
+  gameRoot: string
+  mcVersion: string
+  onStatus?: (message: string) => void
+}): Promise<DepsResult> {
+  const modsDir = path.join(opts.gameRoot, 'mods')
+  mkdirSync(modsDir, { recursive: true })
+
+  // ---- 1) Kurulu mod id'leri + manifest'leri topla ----
+  const installed = new Map<string, FabricModJson>() // fabric mod id -> manifest
+  const provided = new Set<string>() // id + provides (örn. fabric-api soyutlama)
+  const jars: string[] = []
+  for (const f of readdirSync(modsDir)) {
+    if (!f.toLowerCase().endsWith('.jar')) continue
+    const full = path.join(modsDir, f)
+    jars.push(full)
+    const mj = readFabricModJson(full)
+    if (!mj?.id) continue
+    installed.set(mj.id, mj)
+    provided.add(mj.id)
+    for (const p of mj.provides ?? []) provided.add(p)
+  }
+  if (jars.length === 0) return { ok: true, installed: [], failures: [], skipped: 'mods klasoru bos' }
+
+  // Modrinth slug'u != fabric mod id olabilir (örn. id 'fabric-language-kotlin'
+  // = slug 'fabric-language-kotlin' — çoğunlukla aynı; bilinen farklıları haritala)
+  const slugAlias: Record<string, string> = {
+    'fabric-api': 'fabric-api',
+    'fabric-language-kotlin': 'fabric-language-kotlin'
+  }
+
+  const dl: string[] = []
+  const fails: string[] = []
+  const seenRequests = new Set<string>()
+
+  // ---- 2) Zincirleme bağımlılık çözümü ----
+  for (let round = 0; round < 12; round++) {
+    const missing: string[] = []
+    for (const mj of installed.values()) {
+      for (const dep of Object.keys(mj.depends ?? {})) {
+        if (!provided.has(dep)) missing.push(dep)
+      }
+    }
+    if (missing.length === 0) break
+
+    let progress = false
+    for (const dep of [...new Set(missing)]) {
+      if (seenRequests.has(dep)) continue
+      seenRequests.add(dep)
+      // Minecraft ile gelen çekirdek modüller Modrinth'te yok — bunlar loader
+      // tarafından sağlanır, atla.
+      if (/^(minecraft|java|fabricloader|fabric-api-base)$/.test(dep)) {
+        provided.add(dep)
+        continue
+      }
+      const slug = slugAlias[dep] ?? dep
+      try {
+        opts.onStatus?.(`Eksik bağımlılık indiriliyor: ${slug}...`)
+        const gv = encodeURIComponent(JSON.stringify([opts.mcVersion]))
+        const res = await fetch(
+          `${MODRINTH_API}/project/${encodeURIComponent(slug)}/version?game_versions=${gv}&loaders=%5B%22fabric%22%5D`,
+          { headers: { 'User-Agent': MODRINTH_UA } }
+        )
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const versions = (await res.json()) as {
+          version_number: string
+          files: { url: string; filename: string; primary: boolean; hashes: { sha1: string } }[]
+        }[]
+        if (!Array.isArray(versions) || versions.length === 0) {
+          throw new Error(`${opts.mcVersion} icin surum yok (slug: ${slug})`)
+        }
+        const file = versions[0].files.find((f) => f.primary) ?? versions[0].files[0]
+        if (!file) throw new Error('dosya bilgisi yok')
+        const dest = path.join(modsDir, file.filename)
+        if (existsSync(dest)) {
+          // zaten indirilmiş ama id seti güncellenmemiş — manifest'ini oku
+          const mj = readFabricModJson(dest)
+          if (mj?.id) {
+            installed.set(mj.id, mj)
+            provided.add(mj.id)
+            for (const p of mj.provides ?? []) provided.add(p)
+          }
+          progress = true
+          continue
+        }
+        const tmp = `${dest}.part`
+        const dres = await fetch(file.url, { headers: { 'User-Agent': MODRINTH_UA } })
+        if (!dres.ok || !dres.body) throw new Error(`HTTP ${dres.status}`)
+        await pipeline(Readable.fromWeb(dres.body as never), createWriteStream(tmp))
+        const buf = readFileSync(tmp)
+        if (createHash('sha1').update(buf).digest('hex') !== file.hashes.sha1) {
+          throw new Error('butunluk kontrolu basarisiz')
+        }
+        renameSync(tmp, dest)
+        dl.push(file.filename)
+        const mj = readFabricModJson(dest)
+        if (mj?.id) {
+          installed.set(mj.id, mj)
+          provided.add(mj.id)
+          for (const p of mj.provides ?? []) provided.add(p)
+        }
+        progress = true
+        opts.onStatus?.(`Bağımlılık kuruldu: ${file.filename}`)
+      } catch (err) {
+        fails.push(`${dep}: ${err instanceof Error ? err.message : String(err)}`)
+        provided.add(dep) // tekrar deneme döngüsüne düşmesin
+      }
+    }
+    if (!progress && fails.length > 0) break
+  }
+
+  return { ok: fails.length === 0, installed: dl, failures: fails }
 }

@@ -275,7 +275,7 @@ ipcMain.handle('mods:host-profile', async (_e, p: { host: string }) => {
   return body.profile ?? null
 })
 ipcMain.handle('mods:fabric-ensure', async (_e, p: { mcVersion: string; loaderVersion: string }) => {
-  const { ensureFabricProfile, ensureFabricApi } = await import('./fabric')
+  const { ensureFabricProfile, ensureFabricApi, resolveModDependencies } = await import('./fabric')
   const prof = await ensureFabricProfile({
     gameRoot: GAME_ROOT,
     mcVersion: String(p.mcVersion),
@@ -298,7 +298,20 @@ ipcMain.handle('mods:fabric-ensure', async (_e, p: { mcVersion: string; loaderVe
       }
     }
   })
-  return { localVersionId: prof.localVersionId, fabricApi: api }
+  // Faz 12.6: genel bağımlılık çözümü — modların fabric.mod.json 'depends'
+  // bildirimlerini tarar, eksikleri (örn. fabric-language-kotlin) zincirleme
+  // indirir. VeinMiner tarzı ikincil bağımlılıklar böylece crash etmeden
+  // karşılanır.
+  const deps = await resolveModDependencies({
+    gameRoot: GAME_ROOT,
+    mcVersion: String(p.mcVersion),
+    onStatus: (m) => {
+      for (const w of BrowserWindow.getAllWindows()) {
+        w.webContents.send('game:event', { type: 'status', message: m })
+      }
+    }
+  })
+  return { localVersionId: prof.localVersionId, fabricApi: api, deps }
 })
 // ---- Faz 7: plugin senkronizasyonu (arkadas tarafi) ----
 ipcMain.handle(
