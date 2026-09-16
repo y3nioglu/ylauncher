@@ -47,11 +47,13 @@ jobs:
       - name: Install dependencies
         run: npm install --ignore-scripts
 
-      - name: Build and publish release
+      - name: Build (electron-vite: main + preload + renderer)
+        run: npm run build
+
+      - name: Package and publish release
         env:
           # electron-builder GITHUB_TOKEN ile release olusturur (tag'ten surum okur)
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          EP_GITHUB_COMMIT: true
         run: npx electron-builder --win --publish always
 
       - name: Upload build log on failure

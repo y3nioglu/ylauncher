@@ -1,6 +1,10 @@
 {
   "name": "mc-friends-launcher",
   "version": "0.1.5",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/y3nioglu/ylauncher.git"
+  },
   "description": "Arkadas grubu icin ozel Minecraft launcher",
   "private": true,
   "main": "out/main/index.js",
