@@ -213,10 +213,11 @@ export interface GameBridge {
     mcVersion: string
     publishedAt: string
   } | null>
-  /** Fabric profilini saglar (yerelde yoksa meta'dan ceker) + fabric-api bagimliligini otomatik kurar. */
+  /** Fabric profilini saglar (yerelde yoksa meta'dan ceker) + fabric-api ve genel mod bagimliliklarini otomatik kurar. */
   fabricEnsure: (mcVersion: string, loaderVersion: string) => Promise<{
     localVersionId: string
     fabricApi?: { ok: boolean; installed?: string; skipped?: string }
+    deps?: { ok: boolean; installed: string[]; failures: string[]; skipped?: string }
   }>
 
   /** Faz 7: host'un plugin manifestini kontrol eder (indirmez). */

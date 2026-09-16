@@ -294,6 +294,14 @@ export default function ServerListScreen({ user, servers, onRefresh }: Props) {
                 setSyncNote((prev) => prev ?? `🧱 Fabric API kurulamadi: ${reason}`)
               }
             }
+            // Faz 12.6/12.7: genel bağımlılık çözümü sonucu — indirilenler ve
+            // ÇÖZÜLEMEYENLER (oyun acilista crash edebilir) kullaniciya net bildirilir
+            if (ensured.deps?.installed?.length) {
+              setSyncNote(`🧱 Eksik bagimliliklar kuruldu (${ensured.deps.installed.length})`)
+            }
+            if (ensured.deps && !ensured.deps.ok && ensured.deps.failures.length > 0) {
+              setSyncNote((prev) => prev ?? `🧱 Cozullemeyen bagimliliklar: ${ensured.deps!.failures.join('; ')}`)
+            }
           }
         } catch {
           setSyncNote((prev) => prev ?? '🧱 Mod kontrolu atlandi (manifeste erisilemedi)')

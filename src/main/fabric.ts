@@ -167,8 +167,78 @@ export interface FabricApiResult {
 
 interface FabricModJson {
   id?: string
+  version?: string
   provides?: string[]
   depends?: Record<string, string>
+}
+
+export interface ModCompatWarning {
+  jar: string
+  modId: string
+  modVersion: string
+  problem: string
+}
+
+/**
+ * clientMods klasörünü sürüm uyumluluğu açısından tarar (host'a YAYIMLAMA
+ * ANINDA uyarı için): Fabric manifestosu olmayan jar'lar, mc sürümünü
+ * bildirmeyen Fabric modları ve MC sürümünü desteklemeyenler işaretlenir.
+ * Bu bir ENGEL DEGIL — sadece host'un dikkatini çeker (uyumsuz mod, arkadas
+ * tarafinda oyun acilisini crash edebilir).
+ */
+export function scanModCompatibility(clientModsDir: string, mcVersion: string): ModCompatWarning[] {
+  const warnings: ModCompatWarning[] = []
+  if (!existsSync(clientModsDir)) return warnings
+  for (const f of readdirSync(clientModsDir)) {
+    if (!f.toLowerCase().endsWith('.jar')) continue
+    const full = path.join(clientModsDir, f)
+    let mj: FabricModJson | null = null
+    try {
+      mj = readFabricModJson(full)
+    } catch {
+      mj = null
+    }
+    if (!mj?.id) {
+      // Forge jar'ı ya da fabric.mod.json olmayan paket — dikkat çekici
+      warnings.push({
+        jar: f,
+        modId: '?',
+        modVersion: '?',
+        problem: 'Fabric mod manifestosu (fabric.mod.json) yok — Forge modu olabilir, Fabric istemcisinde yuklenmez'
+      })
+      continue
+    }
+    // MC surumu destegi: 'minecraft' depends'i surum araligi icerir
+    // (orn. ">=1.21", "1.21.x", "*"). Semver-katlama yerine pratik kontrol:
+    // aralik 'x'/'*' ise uyumlu say; degilse mcVersion'un disinda bir SEMVER
+    // var mi diye kabaca bak (yalnizca net uyusmazliklari isaretle).
+    const mcDep = (mj.depends ?? {})['minecraft']
+    if (typeof mcDep === 'string' && !/^[\s*x^~.,()\-]*$/.test(mcDep)) {
+      // surum numaralari iceriyor: mcVersion'un bu aralikta olup olmadigini
+      // anlamlı kıyaslayabilmek icin basit x.y karsilastirmasi yap
+      const parse = (s: string) => s.split('.').map((n) => parseInt(n, 10) || 0)
+      const cur = parse(mcVersion)
+      let matched = false
+      for (const m of mcDep.matchAll(/(\d+\.\d+(?:\.\d+)?)/g)) {
+        const v = parse(m[1])
+        const [a, b] = [cur[0] ?? 0, cur[1] ?? 0]
+        const [c, d] = [v[0] ?? 0, v[1] ?? 0]
+        if (a === c && b === d) {
+          matched = true
+          break
+        }
+      }
+      if (!matched) {
+        warnings.push({
+          jar: f,
+          modId: mj.id,
+          modVersion: mj.version ?? '?',
+          problem: `MC ${mcVersion} destegi bildirmiyor (depends.minecraft: ${mcDep}) — arkadas tarafinda crash edebilir`
+        })
+      }
+    }
+  }
+  return warnings
 }
 
 /**
@@ -176,7 +246,7 @@ interface FabricModJson {
  * döndürür. (Local header'daki compSize veri-descriptor'lu jar'larda 0
  * olabildiği için central directory kullanılır — her jar'da kesindir.)
  */
-function readFabricModJson(jarPath: string): FabricModJson | null {
+export function readFabricModJson(jarPath: string): FabricModJson | null {
   try {
     const buf = readFileSync(jarPath)
     // EOCD imzasını dosya sonundan tara (max yorum uzunluğu 65_535)

@@ -1,4 +1,6 @@
 // Mojang version manifest + Java gereksinimi (game.ts ve server.ts ortak)
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
 
 export interface ManifestEntry {
   id: string
@@ -13,26 +15,68 @@ export interface VersionManifest {
 
 const MANIFEST_URL = 'https://launchermeta.mojang.com/mc/game/version_manifest_v2.json'
 const MANIFEST_TTL_MS = 10 * 60 * 1000
+const MANIFEST_TIMEOUT_MS = 8_000
 
 let manifestCache: { at: number; data: VersionManifest } | null = null
 const javaMajorCache = new Map<string, number>()
+
+// Disk onbellek dizini (index.ts GAME_ROOT ile set eder). Mojang erisilemediginde
+// son bilinen manifest buradan okunur — 'Oyun oynanabilir kalsin' politikasi.
+let manifestCacheFile: string | null = null
+export function setManifestCacheDir(dir: string): void {
+  manifestCacheFile = path.join(dir, 'cache', 'version_manifest_v2.json')
+}
 
 export async function fetchVersionManifest(): Promise<VersionManifest> {
   if (manifestCache && Date.now() - manifestCache.at < MANIFEST_TTL_MS) {
     return manifestCache.data
   }
-  const res = await fetch(MANIFEST_URL)
-  if (!res.ok) throw new Error(`Surum listesi alinamadi (HTTP ${res.status})`)
-  const json = (await res.json()) as {
-    latest: { release: string }
-    versions: { id: string; type: string; url?: string }[]
+  try {
+    const res = await fetch(MANIFEST_URL, { signal: AbortSignal.timeout(MANIFEST_TIMEOUT_MS) })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const json = (await res.json()) as {
+      latest: { release: string }
+      versions: { id: string; type: string; url?: string }[]
+    }
+    const data: VersionManifest = {
+      latestRelease: json.latest.release,
+      versions: json.versions.map((v) => ({ id: v.id, type: v.type, url: v.url }))
+    }
+    manifestCache = { at: Date.now(), data }
+    // Disk onbellegini tazele (yazma hatasi onemli degil)
+    if (manifestCacheFile) {
+      try {
+        mkdirSync(path.dirname(manifestCacheFile), { recursive: true })
+        writeFileSync(manifestCacheFile, JSON.stringify({ at: Date.now(), data }), 'utf8')
+      } catch {
+        /* yazilamadi -> yalnizca bellek onbellegi */
+      }
+    }
+    return data
+  } catch (err) {
+    // Ag erisilemedi: once bayat bellek, sonra bayat disk onbellegi kullan —
+    // surum listesi/açilis bu sayede calisir (sahada apponfly'da yasandi:
+    // launchermeta.mojang.com ConnectTimeoutError tekrar tekrar).
+    if (manifestCache) return manifestCache.data
+    if (manifestCacheFile && existsSync(manifestCacheFile)) {
+      try {
+        const cached = JSON.parse(readFileSync(manifestCacheFile, 'utf8')) as {
+          at: number
+          data: VersionManifest
+        }
+        if (cached.data?.versions?.length) {
+          manifestCache = { at: cached.at, data: cached.data }
+          return cached.data
+        }
+      } catch {
+        /* bozuk onbellek -> hatayi ilet */
+      }
+    }
+    const why = err instanceof Error ? (err as NodeJS.ErrnoException).code ?? err.message : String(err)
+    throw new Error(
+      `Surum listesi alinamadi (Mojang sunucusuna erisilemedi: ${why}). Internet baglantinizi kontrol edin.`
+    )
   }
-  const data: VersionManifest = {
-    latestRelease: json.latest.release,
-    versions: json.versions.map((v) => ({ id: v.id, type: v.type, url: v.url }))
-  }
-  manifestCache = { at: Date.now(), data }
-  return data
 }
 
 // Version JSON'unun erisilemedigi durumlar icin tahmini fallback

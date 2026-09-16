@@ -634,6 +634,16 @@ export class ServerManager extends EventEmitter {
           } else {
             this.emitEvent({ type: 'log', line: `[modsync] YAYINLAMADI: ${res.skipped ?? 'bilinmeyen'}` })
           }
+          // Faz 12.7: yayimlama aninda uyumluluk taramasi — uyumsuz/manifestosuz
+          // modlari host'a ONCE bildir (arkadas tarafinda crash etmeden).
+          try {
+            const { scanModCompatibility } = await import('./fabric')
+            for (const w of scanModCompatibility(path.join(this.root, 'clientMods'), this.paperVersion ?? 'unknown')) {
+              this.emitEvent({ type: 'log', line: `[modsync] UYARI ${w.jar}: ${w.problem}` })
+            }
+          } catch {
+            /* tarama hatasi yayinlamayi engellemez */
+          }
           const prof = await publishLoaderProfile({
             token: this.apiToken,
             loader: loaderVersion ? 'fabric' : 'vanilla',
@@ -1294,12 +1304,22 @@ export class ServerManager extends EventEmitter {
   }
 
   /** ready aninda beklemeden publish tetikleme (Yenile butonu). */
-  publishClientModsNow(): Promise<{ ok: boolean; count: number; skipped?: string }> {
-    return publishClientMods({
+  async publishClientModsNow(): Promise<{ ok: boolean; count: number; skipped?: string }> {
+    const res = await publishClientMods({
       token: this.apiToken,
       clientModsDir: path.join(this.root, 'clientMods'),
       mcVersion: this.paperVersion ?? 'unknown'
     })
+    // Uyumluluk uyarilarini ServerTools konsoluna/panele log olarak ver
+    try {
+      const { scanModCompatibility } = await import('./fabric')
+      for (const w of scanModCompatibility(path.join(this.root, 'clientMods'), this.paperVersion ?? 'unknown')) {
+        this.emitEvent({ type: 'log', line: `[modsync] UYARI ${w.jar}: ${w.problem}` })
+      }
+    } catch {
+      /* tarama hatasi sonucu etkilemez */
+    }
+    return res
   }
 
   /** Faz 12 UI: clientMods/ klasorunun tam yolunu dondurur (kopyala-yapistir icin).

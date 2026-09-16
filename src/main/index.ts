@@ -23,6 +23,8 @@ interface GameSettings {
 const apiBase = () => getApiBase()
 const GAME_ROOT = path.join(app.getPath('appData'), 'ylauncher')
 const SETTINGS_FILE = path.join(GAME_ROOT, 'settings.json')
+// Mojang manifest disk onbellegi (ag kesilirse surum listesi son bilinen halle acilir)
+void import('./mcmeta').then((m) => m.setManifestCacheDir(GAME_ROOT))
 
 const DEFAULT_SETTINGS: GameSettings = { minRamMB: 1024, maxRamMB: 4096 }
 
