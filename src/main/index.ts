@@ -143,17 +143,6 @@ ipcMain.handle('game:save-settings', (_e, s: GameSettings) => {
   })
 })
 
-// Faz 12.5: API adresini calisma aninda degistirme (paket kurulumlari VPS'e
-// yonlendirme). null/'' = varsayilana don. Yeni adresi dondurur.
-ipcMain.handle('app:set-api-base', (_e, base: string | null) => {
-  const normalized = typeof base === 'string' ? normalizeApiBaseInput(base) : ''
-  setApiBaseOverride(normalized || null)
-  const s = loadSettings()
-  const { apiBaseOverride: _ignored, ...rest } = s
-  saveSettings(normalized ? { ...rest, apiBaseOverride: normalized } : rest)
-  return getApiBase()
-})
-
 ipcMain.handle('app:get-info', () => ({
   gameRoot: GAME_ROOT,
   apiBase: getApiBase(),

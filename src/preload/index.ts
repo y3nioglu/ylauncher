@@ -34,8 +34,6 @@ contextBridge.exposeInMainWorld('launcher', {
   // ancak CORS/kimlik bilgisi derdi olmadan main uzerinden sormak daha temiz)
   getInfo: () => ipcRenderer.invoke('app:get-info'),
   apiHealth: () => ipcRenderer.invoke('app:api-health'),
-  // Faz 12.5: calisma aninda API adresi degistirme (paket kurulumlari icin)
-  setApiBase: (base: string | null) => ipcRenderer.invoke('app:set-api-base', base),
 
   // Faz 11: otomatik guncelleme
   appUpdateInfo: () => ipcRenderer.invoke('app:update-info') as Promise<AppUpdateInfo>,

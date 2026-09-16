@@ -138,8 +138,6 @@ export interface GameBridge {
   saveSettings: (s: GameSettings) => Promise<void>
   getInfo: () => Promise<{ gameRoot: string; apiBase: string; version: string; build: string; ramCapMB: number }>
   apiHealth: () => Promise<ApiHealth>
-  // Faz 12.5: API adresini calisma aninda degistir (null = varsayilana don).
-  setApiBase: (base: string | null) => Promise<string>
 
   // ---- Faz 11: otomatik guncelleme ----
   appUpdateInfo: () => Promise<AppUpdateInfo>

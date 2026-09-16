@@ -38,8 +38,8 @@ export default function App() {
   const [notice, setNotice] = useState<string | null>(null)
   // Faz 8: tema
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
-  // Faz 12.5: API adresi pakete gömülü (DEFAULT_API_BASE). Giriş ekranında
-  // alan YOK — acil durum değişikliği Ayarlar > Sunucu adresi'nden yapılır.
+  // Faz 12.5: API adresi pakete gömülü (DEFAULT_API_BASE) — kullanıcıya
+  // adres sorma/degistirme arayüzü YOK (giriş ekranında da Ayarlar'da da).
 
   // Acilista main surecin canli API adresini renderer istemcisine besle
   // (settings.json override'i main baslangicta uygulanir; preload anlik
@@ -543,43 +543,6 @@ function SettingsPanel({
           Kaydet
         </button>
         {saved && <span className="msg ok inline">Kaydedildi</span>}
-      </div>
-
-      {/* Faz 12.5: API adresi — paket kurulumlarini VPS'e yonlendirme */}
-      <div className="version-box">
-        <div className="version-line">
-          <b>Sunucu adresi (API):</b>
-        </div>
-        <label className="setting-wide">
-          API adresi (bos = varsayilan)
-          <input
-            value={settings.apiBaseOverride ?? ''}
-            onChange={(e) => update({ apiBaseOverride: e.target.value })}
-            placeholder="Orn: http://VPS-IP-VEYA-DOMAIN:8787"
-          />
-        </label>
-        <p className="setting-note">
-          Paket varsayilan olarak localhost:8787'ye bakar; kendi VPS'inin adresini
-          girip Kaydet'e bas — http(s) otomatik eklenir, yeniden baslatmaya gerek yok.
-        </p>
-        <div className="setting-actions">
-          <button
-            type="button"
-            className="btn"
-            onClick={() => {
-              void bridge
-                .setApiBase(settings.apiBaseOverride?.trim() || null)
-                .then((applied) => {
-                  setInfo((prev) => (prev ? { ...prev, apiBase: applied } : prev))
-                  setSaved(true)
-                })
-                .catch(() => {})
-            }}
-          >
-            Uygula ve kontrol et
-          </button>
-          {info && <span className="msg inline">Aktif: {info.apiBase}</span>}
-        </div>
       </div>
 
       {/* Faz 11: otomatik guncelleme */}
