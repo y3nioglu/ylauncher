@@ -48,10 +48,13 @@ execSync(`npm version ${next} --no-git-tag-version`, { stdio: 'inherit', cwd: ro
 execSync(`git add package.json package-lock.json`, { stdio: 'inherit', cwd: root })
 execSync(`git commit -m "release: ${tag}"`, { stdio: 'inherit', cwd: root })
 
-// 3) Tag + push (main ve tag birlikte) — Actions'i tetikleyen adim
-execSync(`git tag ${tag}`, { stdio: 'inherit', cwd: root })
+// 3) Tag + push — Actions'i tetikleyen adim. Dikkat: tag ANNOTATED olmali ve
+// acikca itilmeli; hafif (lightweight) tag + --follow-tags kombinasyonu tag'i
+// uzaga GONDERMEZ (sahada yasanmistir) ve Actions tetiklenmez.
+execSync(`git tag -a ${tag} -m "release: ${tag}"`, { stdio: 'inherit', cwd: root })
 console.log(`\n[push] main + ${tag} itiliyor...\n`)
-execSync(`git push origin HEAD --follow-tags`, { stdio: 'inherit', cwd: root })
+execSync(`git push origin HEAD`, { stdio: 'inherit', cwd: root })
+execSync(`git push origin ${tag}`, { stdio: 'inherit', cwd: root })
 
 console.log(`
 Bitti! GitHub Actions suruyor:
