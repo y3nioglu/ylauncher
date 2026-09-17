@@ -1454,72 +1454,33 @@ html.light body {
   text-overflow: ellipsis;
 }
 
-/* ---- Faz 15: animasyonlu arka plan (parallax bulutlar + yildizlar) ---- */
-/* Saf CSS animasyonu: GPU dostu, oyun performansini etkilemez. */
+/* ---- Duz statik arka plan (animasyonsuz — kullanici tercihi) ---- */
 .bg-scene {
   position: fixed;
   inset: 0;
   z-index: -1;
-  overflow: hidden;
   pointer-events: none;
-  background:
-    radial-gradient(1200px 800px at 70% -10%, #1a2030 0%, transparent 55%),
-    linear-gradient(180deg, #0b0e14 0%, #10141d 100%);
+  background: linear-gradient(180deg, #0b0e14 0%, #10141d 100%);
 }
-/* Kayan bulut katmani (iki tekrarli blok = kesintisiz dongu) */
-.bg-clouds {
-  position: absolute;
-  left: -50%;
-  width: 200%;
-  height: 55%;
-  top: 8%;
-  background-image:
-    radial-gradient(closest-side, rgba(255, 255, 255, 0.05), transparent 70%),
-    radial-gradient(closest-side, rgba(255, 255, 255, 0.035), transparent 70%);
-  background-size: 420px 140px, 620px 190px;
-  background-position: 0 30px, 120px 90px;
-  background-repeat: repeat-x;
-  animation: bg-drift 90s linear infinite;
+
+/* Sunucu listesi: Yenile butonu + sorgulanamadi durumu */
+.srv-refresh-btn {
+  margin-left: 10px;
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 8px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  color: var(--fg, inherit);
+  cursor: pointer;
 }
-/* Yildiz katmani — daha yavas, ters yonde */
-.bg-stars {
-  position: absolute;
-  inset: 0;
-  background-image:
-    radial-gradient(1.2px 1.2px at 20% 30%, rgba(255, 255, 255, 0.5), transparent),
-    radial-gradient(1px 1px at 60% 15%, rgba(255, 255, 255, 0.4), transparent),
-    radial-gradient(1.4px 1.4px at 80% 45%, rgba(255, 255, 255, 0.35), transparent),
-    radial-gradient(1px 1px at 35% 60%, rgba(255, 255, 255, 0.3), transparent),
-    radial-gradient(1.2px 1.2px at 10% 75%, rgba(255, 255, 255, 0.3), transparent),
-    radial-gradient(1px 1px at 90% 70%, rgba(255, 255, 255, 0.28), transparent);
-  animation: bg-drift-rev 140s linear infinite;
-  opacity: 0.8;
+.srv-refresh-btn:hover {
+  border-color: var(--accent, #4f8cff);
 }
-/* Alt siluet: blok daglar (Minecraft hissi) */
-.bg-hills {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 22%;
-  background:
-    conic-gradient(from 45deg at 10% 100%, transparent 90deg, #131822 90deg 180deg) 0 100% / 160px 100%,
-    conic-gradient(from 45deg at 50% 100%, transparent 90deg, #151a26 90deg 180deg) 0 100% / 240px 100%,
-    linear-gradient(180deg, transparent 0%, #131822 30%);
-  background-repeat: repeat-x;
-  opacity: 0.9;
-}
-@keyframes bg-drift {
-  from { transform: translateX(0); }
-  to { transform: translateX(-420px); }
-}
-@keyframes bg-drift-rev {
-  from { transform: translateX(0); }
-  to { transform: translateX(-320px); }
-}
-/* Hafiflik: kullanicini animasyonu azalt tercihine saygi */
-@media (prefers-reduced-motion: reduce) {
-  .bg-clouds, .bg-stars { animation: none; }
+.srv-offline {
+  color: #8b93a3;
+  font-size: 12px;
+  font-style: italic;
 }
 
 /* ---- Faz 17: Modrinth tarayici ---- */

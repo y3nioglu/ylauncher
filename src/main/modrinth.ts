@@ -44,6 +44,16 @@ async function get<T>(path: string, params: Record<string, string>): Promise<T> 
   }
 }
 
+/** /search yaniti: { hits: [...], total: n } — dizi degil! */
+function extractHits(res: unknown): Array<Parameters<typeof toResult>[0]> {
+  if (Array.isArray(res)) return res as Array<Parameters<typeof toResult>[0]>
+  if (res && typeof res === 'object') {
+    const hits = (res as { hits?: unknown }).hits
+    if (Array.isArray(hits)) return hits as Array<Parameters<typeof toResult>[0]>
+  }
+  return []
+}
+
 function toResult(p: {
   project_id: string
   slug: string
@@ -66,25 +76,25 @@ function toResult(p: {
 /** Modpack arama (project_type=modpack). */
 export async function searchModpacks(query: string, limit = 20): Promise<SearchResult[]> {
   const facets = JSON.stringify([['project_type:modpack']])
-  const res = await get<Array<Parameters<typeof toResult>[0]>>('/search', {
+  const res = await get<unknown>('/search', {
     query,
     limit: String(limit),
     index: 'downloads',
     facets
   })
-  return res.map(toResult)
+  return extractHits(res).map(toResult)
 }
 
 /** Resource pack arama (project_type=resourcepack). */
 export async function searchResourcePacks(query: string, limit = 20): Promise<SearchResult[]> {
   const facets = JSON.stringify([['project_type:resourcepack']])
-  const res = await get<Array<Parameters<typeof toResult>[0]>>('/search', {
+  const res = await get<unknown>('/search', {
     query,
     limit: String(limit),
     index: 'downloads',
     facets
   })
-  return res.map(toResult)
+  return extractHits(res).map(toResult)
 }
 
 /** Bir projenin belirli MC surumuyle uyumlu dosyalarinin en yenisini dondurur. */

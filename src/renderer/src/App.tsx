@@ -367,12 +367,8 @@ function HomeView({
 
   return (
     <div className="home-wrap">
-      {/* Faz 15: animasyonlu arka plan (saf CSS, GPU dostu) */}
-      <div className="bg-scene" aria-hidden="true">
-        <div className="bg-stars" />
-        <div className="bg-clouds" />
-        <div className="bg-hills" />
-      </div>
+      {/* Duz statik arka plan — animasyonsuz (kullanici tercihi) */}
+      <div className="bg-scene" aria-hidden="true" />
       <header className="topbar">
         <div className="brand small">
           MC <span>Friends</span>

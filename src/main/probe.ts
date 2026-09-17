@@ -67,10 +67,10 @@ function extractMotd(desc: unknown): string | null {
 }
 
 /**
- * SLP sorgusu. Handshake (status next state) + status request gonderir,
+ * Tek SLP denemesi: handshake (status next state) + status request gonderir,
  * response JSON'unu bekler; ping/pong turuna girmeden kapanir (sunucu icin zararsiz).
  */
-export function probeServer(host: string, port: number, timeoutMs = 3000): Promise<ServerStatus> {
+function tryOnce(host: string, port: number, protocolVersion: number, timeoutMs: number): Promise<ServerStatus> {
   const started = Date.now()
   return new Promise((resolve) => {
     const offline: ServerStatus = {
@@ -99,7 +99,7 @@ export function probeServer(host: string, port: number, timeoutMs = 3000): Promi
       const hostBuf = Buffer.from(host, 'utf8')
       const hs = Buffer.concat([
         writeVarInt(0x00),
-        writeVarInt(-1),
+        writeVarInt(protocolVersion),
         writeVarInt(hostBuf.length),
         hostBuf,
         Buffer.from([0, (port >> 8) & 0xff, port & 0xff]),
@@ -143,4 +143,15 @@ export function probeServer(host: string, port: number, timeoutMs = 3000): Promi
     socket.on('error', () => finish(offline))
     socket.on('close', () => finish(offline))
   })
+}
+
+/**
+ * SLP sorgusu — iki denemeli: once protokol -1 (eski davranis, cogu sunucu kabul eder),
+ * yanit gelmezse modern surum numarasiyla (1.20.5+ bazi kurulumlarda -1'i reddeder).
+ * Toplam sure ~2*timeout ile sinirlidir; ilk basarili deneme kazanir.
+ */
+export async function probeServer(host: string, port: number, timeoutMs = 3000): Promise<ServerStatus> {
+  const first = await tryOnce(host, port, -1, timeoutMs)
+  if (first.online) return first
+  return tryOnce(host, port, 767, timeoutMs)
 }

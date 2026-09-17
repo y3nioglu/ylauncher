@@ -31,6 +31,8 @@ export default function ServerListScreen({ user, servers, onRefresh }: Props) {
   const [probeResult, setProbeResult] = useState<Record<string, boolean>>({})
   // Faz 15: canli sunucu durumu (SLP) — liste her yenilendiginde sorgulanir
   const [liveStatus, setLiveStatus] = useState<Record<string, ProbeStatus>>({})
+  // Elle yenileme: Yenile butonu tiklandiginda SLP sorgulari tekrar calisir
+  const [probeTick, setProbeTick] = useState(0)
   // ---- Katilma durumu izleyici (Faz 5b) ----
   const [joinState, setJoinState] = useState<JoinState>({ phase: 'idle', kick: null })
   const [joinLabel, setJoinLabel] = useState<string | null>(null)
@@ -65,7 +67,7 @@ export default function ServerListScreen({ user, servers, onRefresh }: Props) {
   }, [bridge])
 
   // Faz 15: listedeki her sunucuya SLP sorgusu (ping/oyuncu/MOTD/ikon).
-  // servers degisince tetiklenir; paralel sorgu, hizli zaman asimi.
+  // servers degisince veya Yenile tiklaninca tetiklenir; paralel sorgu.
   useEffect(() => {
     let alive = true
     for (const srv of servers) {
@@ -80,7 +82,7 @@ export default function ServerListScreen({ user, servers, onRefresh }: Props) {
     return () => {
       alive = false
     }
-  }, [bridge, servers])
+  }, [bridge, servers, probeTick])
 
   // Gonderdigim whitelist isteklerinin durumu: canli olay ile aninda tazelenir
   // (host onayladiginda "✅ eklendin" ~1 sn'de gorunur) + 60 sn yedek polling
@@ -386,7 +388,16 @@ export default function ServerListScreen({ user, servers, onRefresh }: Props) {
   return (
     <div className="play-screen">
       <div className="panel active-servers-panel">
-        <h3>Aktif Sunucular</h3>
+        <h3>
+          Aktif Sunucular
+          <button
+            className="srv-refresh-btn"
+            title="Ping/oyuncu/MOTD bilgisini yeniden sorgula"
+            onClick={() => setProbeTick((t) => t + 1)}
+          >
+            ↻ Yenile
+          </button>
+        </h3>
         {servers.length === 0 ? (
           <p className="setting-note">
             Şu an açık sunucu yok. Arkadaşın sunucuyu başlattığında (veya sen
@@ -410,18 +421,28 @@ export default function ServerListScreen({ user, servers, onRefresh }: Props) {
                 <div className="active-server-info">
                   <b>{srv.host}</b> sunucusu açık — <code>{srv.address}:{srv.port}</code>
                   <span className="active-server-ver"> (Paper {srv.mcVersion})</span>
-                  {/* Faz 15: canli durum — ping, oyuncu, MOTD */}
-                  {live && live.online && (
+                  {/* Faz 15: canli durum — ping, oyuncu, MOTD; cevrimdisi de gorunur */}
+                  {live && (
                     <span className="srv-live">
-                      <span className="srv-ping" title="Ping">
-                        {live.latencyMs != null ? `${live.latencyMs} ms` : '...'}
-                      </span>
-                      {live.players && (
-                        <span className="srv-players" title="Oyuncular">
-                          👥 {live.players.online}/{live.players.max}
+                      {live.online ? (
+                        <>
+                          <span className="srv-ping" title="Ping">
+                            {live.latencyMs != null ? `${live.latencyMs} ms` : '...'}
+                          </span>
+                          {live.players && (
+                            <span className="srv-players" title="Oyuncular">
+                              👥 {live.players.online}/{live.players.max}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="srv-offline" title="Sunucu durumu sorgulanamadi (kapali olabilir veya sorgu yanit alinmadi) — Yenile ile tekrar dene">
+                          ◔ sorgulanamadı
                         </span>
                       )}
-                      {live.motd && <span className="srv-motd" title={live.motd}>{live.motd.slice(0, 60)}</span>}
+                      {live.online && live.motd && (
+                        <span className="srv-motd" title={live.motd}>{live.motd.slice(0, 60)}</span>
+                      )}
                     </span>
                   )}
                   {/* Faz 14: icerik rozetleri — sunucudaki mod/plugin sayilari */}
