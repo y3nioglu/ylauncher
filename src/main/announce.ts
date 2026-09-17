@@ -14,6 +14,9 @@ interface AnnounceOpts {
   /** Faz 14: rozet meta verisi (arkadas listesinde gosterilir). */
   clientMods?: number
   plugins?: number
+  /** Cift adres: dogrudan adres erisilemezse katilan taraf bunu dener. */
+  tunnelAddress?: string | null
+  tunnelPort?: number | null
 }
 
 async function post(path: string, token: string | null, body: unknown): Promise<void> {
@@ -50,10 +53,13 @@ export async function announceServer(opts: AnnounceOpts): Promise<void> {
       mcVersion: opts.mcVersion,
       online: opts.online,
       clientMods: opts.clientMods ?? 0,
-      plugins: opts.plugins ?? 0
+      plugins: opts.plugins ?? 0,
+      ...(opts.tunnelAddress
+        ? { tunnelAddress: opts.tunnelAddress, tunnelPort: opts.tunnelPort ?? null }
+        : {})
     })
     console.log(
-      `[announce] sunucu duyuruldu: ${opts.address}:${opts.port} (${opts.mcVersion}) mod:${opts.clientMods ?? 0} plugin:${opts.plugins ?? 0}`
+      `[announce] sunucu duyuruldu: ${opts.address}:${opts.port}${opts.tunnelAddress ? ` (turel: ${opts.tunnelAddress}:${opts.tunnelPort ?? '?'})` : ''} (${opts.mcVersion}) mod:${opts.clientMods ?? 0} plugin:${opts.plugins ?? 0}`
     )
   } catch (err) {
     console.log(

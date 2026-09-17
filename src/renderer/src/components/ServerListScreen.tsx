@@ -67,17 +67,26 @@ export default function ServerListScreen({ user, servers, onRefresh }: Props) {
   }, [bridge])
 
   // Faz 15: listedeki her sunucuya SLP sorgusu (ping/oyuncu/MOTD/ikon).
-  // servers degisince veya Yenile tiklaninca tetiklenir; paralel sorgu.
+  // once dogrudan adres; yanit gelmezse host'un turel adresi denenir.
   useEffect(() => {
     let alive = true
     for (const srv of servers) {
       const key = String(srv.hostId)
-      bridge
-        .probeServerStatus(srv.address, srv.port)
-        .then((st) => {
-          if (alive) setLiveStatus((prev) => ({ ...prev, [key]: st }))
-        })
-        .catch(() => {})
+      void (async () => {
+        // 1) Dogrudan adres
+        const direct = await bridge.probeServerStatus(srv.address, srv.port).catch(() => null)
+        if (alive && direct?.online) {
+          setLiveStatus((prev) => ({ ...prev, [key]: direct }))
+          return
+        }
+        // 2) Yedek: host'un turel adresi (dogrudan yol engelli olabilir)
+        if (srv.tunnelAddress) {
+          const t = await bridge
+            .probeServerStatus(srv.tunnelAddress, srv.tunnelPort ?? 25565)
+            .catch(() => null)
+          if (alive && t?.online) setLiveStatus((prev) => ({ ...prev, [key]: t }))
+        }
+      })()
     }
     return () => {
       alive = false
@@ -233,16 +242,27 @@ export default function ServerListScreen({ user, servers, onRefresh }: Props) {
         window.clearTimeout(joinHoldTimerRef.current)
         joinHoldTimerRef.current = null
       }
+      // Cift adres: dogrudan adres erisilemezse host'un turel adresi kullanilir
+      const tunnel = srv.tunnelAddress
+        ? { host: srv.tunnelAddress, port: srv.tunnelPort ?? 25565 }
+        : null
       try {
         setJoinLabel('Sunucu kontrol ediliyor...')
-        const probe = await bridge.probeServer(srv.address, srv.port)
+        let probe = await bridge.probeServer(srv.address, srv.port)
+        let useTunnel = false
+        if (!probe.ok && tunnel) {
+          setJoinLabel(`Dogrudan baglanti kurulamadi, turel deneniyor (${tunnel.host}:${tunnel.port})...`)
+          probe = await bridge.probeServer(tunnel.host, tunnel.port)
+          useTunnel = true
+        }
         setProbeResult((prev) => ({ ...prev, [key]: probe.ok }))
         if (!probe.ok) {
           setJoinLabel(
-            `Sunucuya ulasilamadi (${srv.address}:${srv.port}${probe.error ? ` — ${probe.error}` : ''}). Host'un sunucusu kapali olabilir.`
+            `Sunucuya ulasilamadi (${srv.address}:${srv.port}${tunnel ? ` ve turel ${tunnel.host}:${tunnel.port}` : ''}${probe.error ? ` — ${probe.error}` : ''}). Host'un sunucusu kapali olabilir.`
           )
           return
         }
+        const joinAddr = useTunnel && tunnel ? `${tunnel.host}:${tunnel.port}` : `${srv.address}:${srv.port}`
         const known = knownVersionsRef.current.has(srv.mcVersion)
         if (!known) {
           setJoinLabel(
@@ -343,7 +363,7 @@ export default function ServerListScreen({ user, servers, onRefresh }: Props) {
         await bridge.launch({
           versionId: srv.mcVersion,
           nickname: user.nickname,
-          serverAddress: `${srv.address}:${srv.port}`,
+          serverAddress: joinAddr,
           ...(localVersionId ? { localVersionId } : {})
         })
       } catch (err) {

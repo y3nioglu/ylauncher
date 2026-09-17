@@ -559,6 +559,8 @@ export class ServerManager extends EventEmitter {
       const addr = this.directAddress ?? this.boreAddress
       if (!addr || !this.child || !this.ready) return
       const [host, portStr] = addr.split(':')
+      // Turel adresi: dogrudan adres duyurulaniyorsa yedek olarak turel de gitsin
+      const tbore = this.boreAddress?.split(':') ?? null
       void announceServer({
         token: this.apiToken,
         address: host,
@@ -566,7 +568,9 @@ export class ServerManager extends EventEmitter {
         mcVersion: this.paperVersion ?? 'unknown',
         online: true,
         clientMods: this.countClientMods(),
-        plugins: this.countPlugins()
+        plugins: this.countPlugins(),
+        tunnelAddress: host === (tbore?.[0] ?? '') ? null : (tbore?.[0] ?? null),
+        tunnelPort: tbore ? Number(tbore[1]) : null
       })
     }, 5 * 60_000)
     this.announceTimer.unref?.()
@@ -661,6 +665,9 @@ export class ServerManager extends EventEmitter {
         const addr = this.directAddress ?? this.boreAddress
         if (addr) {
           const [host, portStr] = addr.split(':')
+          // Cift adres duyurusu: dogrudan adres erisilemezse (bulut guvenlik
+          // grubu 25565'i kapatmis olabilir) katilan taraf tureli dener.
+          const tbore = this.boreAddress?.split(':') ?? null
           void announceServer({
             token: this.apiToken,
             address: host,
@@ -669,7 +676,9 @@ export class ServerManager extends EventEmitter {
             online: true,
             // Faz 14: rozet meta verisi — sunucu icerigi arkadas listesinde gosterilir
             clientMods: this.countClientMods(),
-            plugins: this.countPlugins()
+            plugins: this.countPlugins(),
+            tunnelAddress: host === (tbore?.[0] ?? '') ? null : (tbore?.[0] ?? null),
+            tunnelPort: tbore ? Number(tbore[1]) : null
           })
         }
       }

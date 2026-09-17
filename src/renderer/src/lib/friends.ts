@@ -92,6 +92,9 @@ export interface ActiveServer {
   address: string
   port: number
   mcVersion: string
+  /** Cift adres: dogrudan adres erisilemezse denenecek turel (bore) adresi. */
+  tunnelAddress?: string | null
+  tunnelPort?: number | null
   announcedAt: string
   /** Faz 14: duyuruyla gelen icerik meta verisi (rozetler). */
   clientMods?: number

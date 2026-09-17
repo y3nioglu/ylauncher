@@ -35,7 +35,11 @@ const announceSchema = z.object({
   online: z.boolean().default(true),
   // Faz 14: icerik meta verisi (rozetler) — negatif/absurd degerler kabul edilmez
   clientMods: z.number().int().min(0).max(100).default(0),
-  plugins: z.number().int().min(0).max(100).default(0)
+  plugins: z.number().int().min(0).max(100).default(0),
+  // Cift adres: host'un turel (bore) adresi — dogrudan adres erisilemezse kullanilir.
+  // Bore portu rastgele atandigindan adres+port ayri tasilir; ikisi de opsiyonel.
+  tunnelAddress: z.string().max(253).regex(/^(\d{1,3}(?:\.\d{1,3}){3}|[a-z0-9][a-z0-9.\-]*\.[a-z]{2,})$/i).nullable().optional(),
+  tunnelPort: z.number().int().min(1).max(65535).nullable().optional()
 })
 
 interface ActiveServerRow {
@@ -48,6 +52,8 @@ interface ActiveServerRow {
   announced_at: Date
   client_mods?: number
   plugins?: number
+  tunnel_address?: string | null
+  tunnel_port?: number | null
   kick_reason?: string | null
   kick_raw?: string | null
   kick_at?: Date | null
@@ -71,6 +77,8 @@ function toDto(row: ActiveServerRow) {
     announcedAt: new Date(row.announced_at).toISOString(),
     clientMods: row.client_mods ?? 0,
     plugins: row.plugins ?? 0,
+    tunnelAddress: row.tunnel_address ?? null,
+    tunnelPort: row.tunnel_port ?? null,
     lastKick:
       row.kick_reason && row.kick_at
         ? { reason: row.kick_reason, rawLine: row.kick_raw ?? '', at: new Date(row.kick_at).toISOString() }
@@ -90,7 +98,7 @@ serversRouter.post(
       res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Gecersiz veri' })
       return
     }
-    const { address, port, mcVersion, online, clientMods, plugins } = parsed.data
+    const { address, port, mcVersion, online, clientMods, plugins, tunnelAddress, tunnelPort } = parsed.data
     const uid = req.auth!.uid
 
     if (!online) {
@@ -100,15 +108,17 @@ serversRouter.post(
     }
 
     await sql`
-      insert into public.ylauncher_servers (host_id, address, port, mc_version, announced_at, client_mods, plugins)
-      values (${uid}, ${address}, ${port}, ${mcVersion}, now(), ${clientMods}, ${plugins})
+      insert into public.ylauncher_servers (host_id, address, port, mc_version, announced_at, client_mods, plugins, tunnel_address, tunnel_port)
+      values (${uid}, ${address}, ${port}, ${mcVersion}, now(), ${clientMods}, ${plugins}, ${tunnelAddress ?? null}, ${tunnelPort ?? null})
       on conflict (host_id) do update
       set address = excluded.address,
           port = excluded.port,
           mc_version = excluded.mc_version,
           announced_at = now(),
           client_mods = excluded.client_mods,
-          plugins = excluded.plugins
+          plugins = excluded.plugins,
+          tunnel_address = excluded.tunnel_address,
+          tunnel_port = excluded.tunnel_port
     `
     res.status(201).json({ announced: true })
   })
@@ -165,7 +175,7 @@ serversRouter.get(
     const uid = req.auth!.uid
     const rows = await sql<ActiveServerRow[]>`
       select s.host_id, s.address, s.port, s.mc_version, s.announced_at,
-             s.client_mods, s.plugins,
+             s.client_mods, s.plugins, s.tunnel_address, s.tunnel_port,
              u.nickname, u.last_seen_at,
              k.reason as kick_reason, k.raw_line as kick_raw, k.created_at as kick_at
       from public.ylauncher_servers s
