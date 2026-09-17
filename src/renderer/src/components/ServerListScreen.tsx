@@ -448,7 +448,7 @@ export default function ServerListScreen({ user, servers, onRefresh }: Props) {
                   {/* Faz 14: icerik rozetleri — sunucudaki mod/plugin sayilari */}
                   {(srv.clientMods ?? 0) > 0 && (
                     <span
-                      className="badge content-badge"
+                      className="content-badge"
                       title={`Host bu sunucuya ${srv.clientMods} client mod kurmus — Katil dediginde oyununa otomatik indirilir`}
                       style={{
                         marginLeft: 6,
@@ -465,7 +465,7 @@ export default function ServerListScreen({ user, servers, onRefresh }: Props) {
                   )}
                   {(srv.plugins ?? 0) > 0 && (
                     <span
-                      className="badge content-badge"
+                      className="content-badge"
                       title={`Host bu sunucuya ${srv.plugins} server plugin kurmus — Katil dediginde otomatik senkronlanir`}
                       style={{
                         marginLeft: 6,

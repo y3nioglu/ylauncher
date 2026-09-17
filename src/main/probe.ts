@@ -32,18 +32,6 @@ function packet(data: Buffer): Buffer[] {
   return [writeVarInt(data.length), data]
 }
 
-function readVarInt(buf: Buffer, offset: number): { value: number; bytes: number } | null {
-  let result = 0
-  let shift = 0
-  for (let i = offset; i < Math.min(buf.length, offset + 5); i++) {
-    const b = buf[i]
-    result |= (b & 0x7f) << shift
-    if ((b & 0x80) === 0) return { value: result, bytes: i - offset + 1 }
-    shift += 7
-  }
-  return null
-}
-
 /** MOTD'yi JSON'dan duz metne indirger (legacy renk kodlari temizlenir). */
 function extractMotd(desc: unknown): string | null {
   if (typeof desc === 'string') return desc.replace(/§./g, '').trim() || null
@@ -64,6 +52,36 @@ function extractMotd(desc: unknown): string | null {
     return out.replace(/§./g, '').trim() || null
   }
   return null
+}
+
+/**
+ * Esnek JSON cikarimi: status JSON, tamponun herhangi bir konumunda baslayabilir
+ * (bore/relay benzeri tüneller oyuncu akisina kontrol cerceveleri ekleyebilir:
+ * or. {"Accept":...} — katı varint cercevelemesi bunu paket sanip yanlis okur).
+ * Aday '{' konumlarindan JSON.parse dener; status sekline uymayan objeyi
+ * (or. relay kontrol frame'i) atlar. 'wait' = daha fazla veri gelmeli.
+ */
+function extractStatusJson(buf: Buffer): Record<string, unknown> | null | 'wait' {
+  if (buf.length === 0) return 'wait'
+  if (buf.length > 8192) return null // makul bir yanit bu kadar buyuk olamaz
+  const text = buf.toString('latin1')
+  let tried = 0
+  for (let i = text.indexOf('{'); i >= 0 && tried < 16; i = text.indexOf('{', i + 1)) {
+    tried++
+    try {
+      const parsed = JSON.parse(text.slice(i)) as unknown
+      if (parsed && typeof parsed === 'object') {
+        const o = parsed as Record<string, unknown>
+        // Status yaniti sekli: version / players / description alanlarindan en az biri
+        if ('version' in o || 'players' in o || 'description' in o) return o
+        // Sekil uymuyor (kontrol frame'i) — sonraki '{' adayina bak
+      }
+    } catch {
+      /* bu konumda tamamlanmis JSON yok — ya bekleyecegiz ya diger aday */
+    }
+  }
+  // Hicbir aday parse olmadı: JSON henüz tamamlanmamış olabilir
+  return 'wait'
 }
 
 /**
@@ -111,32 +129,17 @@ function tryOnce(host: string, port: number, protocolVersion: number, timeoutMs:
 
     socket.on('data', (chunk) => {
       buf = Buffer.concat([buf, chunk])
-      const lenInfo = readVarInt(buf, 0)
-      if (!lenInfo) return
-      if (buf.length < lenInfo.bytes + lenInfo.value) return // paket tamamlanmadi
-      const body = buf.subarray(lenInfo.bytes, lenInfo.bytes + lenInfo.value)
-      // Response paketi: id(0x00) + strLen varint + JSON
-      const strInfo = readVarInt(body, 1)
-      if (!strInfo) return finish(offline)
-      const json = body.subarray(1 + strInfo.bytes, 1 + strInfo.bytes + strInfo.value).toString('utf8')
-      try {
-        const s = JSON.parse(json) as {
-          version?: { name?: string }
-          players?: { online?: number; max?: number }
-          description?: unknown
-          favicon?: string
-        }
-        finish({
-          online: true,
-          latencyMs: Date.now() - started,
-          players: s.players ? { online: s.players.online ?? 0, max: s.players.max ?? 0 } : null,
-          motd: extractMotd(s.description),
-          version: s.version?.name ?? null,
-          favicon: s.favicon?.startsWith('data:image/png;base64,') ? s.favicon : null
-        })
-      } catch {
-        finish(offline)
-      }
+      const s = extractStatusJson(buf)
+      if (s === 'wait') return // paket tamamlanmadi / JSON yarim
+      if (!s) return finish(offline)
+      finish({
+        online: true,
+        latencyMs: Date.now() - started,
+        players: s.players ? { online: (s.players as { online?: number }).online ?? 0, max: (s.players as { max?: number }).max ?? 0 } : null,
+        motd: extractMotd(s.description),
+        version: (s.version as { name?: string } | undefined)?.name ?? null,
+        favicon: typeof s.favicon === 'string' && s.favicon.startsWith('data:image/png;base64,') ? s.favicon : null
+      })
     })
 
     socket.on('timeout', () => finish(offline))
